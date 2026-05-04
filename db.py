@@ -1,6 +1,7 @@
 import os
+from datetime import datetime
 from dotenv import load_dotenv
-from peewee import PostgresqlDatabase, Model, CharField, IntegerField, BooleanField
+from peewee import PostgresqlDatabase, Model, AutoField, CharField, IntegerField, BooleanField, DateTimeField, SQL
 from urllib.parse import urlparse
 
 load_dotenv()
@@ -27,6 +28,29 @@ def _make_db():
 
 
 db = _make_db()
+
+
+class Subscription(Model):
+    id                  = AutoField()
+    user_id             = CharField(null=True)
+    user_name           = CharField(null=True)
+    subscribed_at       = CharField(null=True)
+    timeline            = CharField(null=True)
+    total_chargebacks   = CharField(null=True)
+    total               = CharField(null=True)
+    interrupted         = CharField(null=True)
+    risk_level          = CharField(null=True)
+    v1                  = BooleanField(null=True)
+    selected            = BooleanField(null=True)
+    model_id            = CharField(null=True)
+    tracking_model_id   = CharField(null=True)
+    tracking_model_name = CharField(null=True)
+    updated_at          = DateTimeField(default=datetime.now)
+
+    class Meta:
+        database   = db
+        table_name = 'subscriptions'
+        indexes    = ((('tracking_model_name', 'user_id'), True),)
 
 
 class TrackingLinkSubscriber(Model):

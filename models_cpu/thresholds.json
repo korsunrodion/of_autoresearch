@@ -8,5 +8,6 @@
   "vh_cold": 0.8274635490481632,
   "vh_extreme_cold": 0.688892694622252,
   "warm_vh_rescue": 0.4301745224726513,
-  "cold_ord_gate": 0.10
+  "cold_ord_gate": 0.10,
+  "extreme_cold": 0.40
 }
