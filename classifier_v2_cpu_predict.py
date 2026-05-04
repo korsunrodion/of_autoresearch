@@ -705,6 +705,51 @@ def train_and_save(model_dir, export_js=None):
         clf_cvh.fit(X_cve_cold, y_cve)
         cold_vh_clfs.append(clf_cvh)
 
+    # ── Cold High vs Extreme secondary classifier ────────────────────────────
+    # Rescues true High users that fire the Extreme gate in cold-start.
+    # total_chargebacks (preserved through COLD_OVERRIDE) is the primary signal.
+    print("\n=== Cold High vs Extreme (secondary classifier) ===", flush=True)
+    sub_che = per_user[per_user['risk_level'].isin(['High', 'Extreme'])].copy()
+    sub_che['y'] = (sub_che['risk_level'] == 'High').astype(int)
+    X_che, y_che = sub_che[feats].values, sub_che['y'].values
+    X_che_cold = make_cold_X(X_che, feats)
+    spw_che = (y_che == 0).sum() / max(y_che.sum(), 1)
+    print(f"  High={y_che.sum()} Extreme={(y_che==0).sum()} spw={spw_che:.1f}", flush=True)
+
+    SEEDS_CHE = [42, 7, 123, 999, 2025]
+    che_oof = np.zeros(len(y_che))
+    for seed in SEEDS_CHE:
+        clf_tmp = LGBMClassifier(num_leaves=63, n_estimators=500, learning_rate=0.03,
+                                 scale_pos_weight=spw_che, n_jobs=-1, verbose=-1,
+                                 subsample=0.80, colsample_bytree=0.85,
+                                 min_child_samples=10, subsample_freq=1,
+                                 random_state=seed)
+        cv_che = StratifiedKFold(n_splits=5, shuffle=True, random_state=seed)
+        pr_che = np.zeros(len(y_che))
+        for ti, vi in cv_che.split(X_che_cold, y_che):
+            clf_tmp.fit(X_che_cold[ti], y_che[ti])
+            pr_che[vi] = clf_tmp.predict_proba(X_che_cold[vi])[:, 1]
+        che_oof += pr_che
+    che_oof /= len(SEEDS_CHE)
+    from sklearn.metrics import precision_recall_fscore_support as _prf_che
+    t_che = find_best_threshold(y_che, che_oof)
+    p_che, r_che, f_che, _ = _prf_che(y_che, (che_oof >= t_che).astype(int),
+                                       pos_label=1, average='binary', zero_division=0)
+    print(f"  Cold High OOF: P={p_che:.2%} R={r_che:.2%} F1={f_che:.2%} @ t={t_che:.3f}",
+          flush=True)
+    thresholds['cold_high_extreme'] = float(t_che)
+
+    print("  Training final cold_high ensemble...", flush=True)
+    cold_high_clfs = []
+    for seed in SEEDS_CHE:
+        clf_ch = LGBMClassifier(num_leaves=63, n_estimators=700, learning_rate=0.03,
+                                scale_pos_weight=spw_che, n_jobs=-1, verbose=-1,
+                                subsample=0.80, colsample_bytree=0.85,
+                                min_child_samples=10, subsample_freq=1,
+                                random_state=seed)
+        clf_ch.fit(X_che_cold, y_che)
+        cold_high_clfs.append(clf_ch)
+
     # ── Warm VH rescue classifier ────────────────────────────────────────────
     # Binary VH(1) vs {Extreme,High,Low}(0) on warm augmented features.
     # Used at predict time for warm users that fire the Extreme branch, so that
@@ -753,7 +798,8 @@ def train_and_save(model_dir, export_js=None):
     print(f"\nSaving models to {model_dir}/...", flush=True)
     for name, obj in [('extreme', clf_extreme), ('high', clf_high),
                       ('low', clf_low), ('ordinal', clf_ordinal), ('vh', clf_vh),
-                      ('cold_vh', cold_vh_clfs), ('warm_vh_rescue', clf_warm_rescue)]:
+                      ('cold_vh', cold_vh_clfs), ('cold_high', cold_high_clfs),
+                      ('warm_vh_rescue', clf_warm_rescue)]:
         with open(os.path.join(model_dir, f'{name}_model.pkl'), 'wb') as f:
             pickle.dump(obj, f)
     with open(os.path.join(model_dir, 'thresholds.json'), 'w') as f:
@@ -781,7 +827,7 @@ def train_and_save(model_dir, export_js=None):
 def predict(model_dir, users=None, output=None):
     print("Loading models...", flush=True)
     models, thresholds, feat_info = {}, {}, {}
-    for name in ['extreme', 'high', 'low', 'ordinal', 'vh', 'cold_vh', 'warm_vh_rescue']:
+    for name in ['extreme', 'high', 'low', 'ordinal', 'vh', 'cold_vh', 'cold_high', 'warm_vh_rescue']:
         path = os.path.join(model_dir, f'{name}_model.pkl')
         if os.path.exists(path):
             with open(path, 'rb') as f:
@@ -793,10 +839,10 @@ def predict(model_dir, users=None, output=None):
     feats = feat_info['base_features']
 
     print("Loading dataset...", flush=True)
-    df = _fetch_train(selected=False)
-    df = _clean_train(df)
+    df = _fetch_verify()
+    df = _clean_verify(df)
     try:
-        _db_train.close()
+        _db_verify.close()
     except Exception:
         pass
     if users:
@@ -867,6 +913,16 @@ def predict(model_dir, users=None, output=None):
     else:
         cold_vh_proba = np.zeros(len(per_user))
 
+    if 'cold_high' in models:
+        cold_high_obj = models['cold_high']
+        if isinstance(cold_high_obj, list):
+            cold_high_proba = np.mean([clf.predict_proba(X_base_cold)[:, 1]
+                                       for clf in cold_high_obj], axis=0)
+        else:
+            cold_high_proba = cold_high_obj.predict_proba(X_base_cold)[:, 1]
+    else:
+        cold_high_proba = np.zeros(len(per_user))
+
     # Warm rescue: VH vs {Extreme,High,Low} on augmented features for warm users.
     warm_rescue_proba = (models['warm_vh_rescue'].predict_proba(X_aug)[:, 1]
                          if 'warm_vh_rescue' in models else np.zeros(len(per_user)))
@@ -885,6 +941,7 @@ def predict(model_dir, users=None, output=None):
     cold_mask = (per_user['model_any_risk_frac'].fillna(0) == 0).values
 
     t_cold_vh_e    = thresholds.get('vh_extreme_cold', 0.5)
+    t_cold_high    = thresholds.get('cold_high_extreme', 0.5)
     t_warm_rescue  = thresholds.get('warm_vh_rescue', 0.47)
     t_cold_vh_soft = thresholds.get('cold_vh_soft_gate', 0.01)
     t_cold_ord     = thresholds.get('cold_ord_gate', 0.10)
@@ -901,6 +958,8 @@ def predict(model_dir, users=None, output=None):
             if e_proba[i] >= COLD_T_E:
                 if cold_vh_proba[i] >= t_cold_vh_e:
                     predicted.append('Very High')
+                elif cold_high_proba[i] >= t_cold_high:
+                    predicted.append('High')
                 else:
                     predicted.append('Extreme')
             elif cold_vh_proba[i] >= t_cold_vh_e and (
