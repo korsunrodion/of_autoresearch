@@ -8,9 +8,9 @@ load_dotenv()
 
 
 def _make_verify_db():
-    url = os.environ.get('VERIFY_DB_URL') or os.environ.get('DB_VERIFY_URL')
+    url = os.environ.get('DB_VERIFY_URL')
     if not url:
-        raise RuntimeError('VERIFY_DB_URL environment variable not set')
+        raise RuntimeError('DB_VERIFY_URL environment variable not set')
     p = urlparse(url)
     return PostgresqlDatabase(
         p.path.lstrip('/'),
