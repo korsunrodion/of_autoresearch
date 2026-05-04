@@ -1025,9 +1025,15 @@ def predict(model_dir, users=None, output=None):
                     e_proba[i] >= t_cold_vh_soft or ord_proba[i] >= t_cold_ord):
                 # Moderate VH: cold_vh confident + minimal e_proba or ordinal risk signal.
                 # No-risk FPs have e_proba < 0.009 AND ord_proba < 0.08 — blocked by both gates.
-                predicted.append('Very High')
+                if cold_low_proba[i] >= t_cold_low:
+                    predicted.append('Low')
+                else:
+                    predicted.append('Very High')
             elif h_proba[i] >= t_h_cold:
-                predicted.append('High')
+                if cold_low_proba[i] >= t_cold_low:
+                    predicted.append('Low')
+                else:
+                    predicted.append('High')
             elif cold_low_proba[i] >= t_cold_low:
                 predicted.append('Low')
             else:
