@@ -793,10 +793,10 @@ def predict(model_dir, users=None, output=None):
     feats = feat_info['base_features']
 
     print("Loading dataset...", flush=True)
-    df = _fetch_verify()
-    df = _clean_verify(df)
+    df = _fetch_train(selected=False)
+    df = _clean_train(df)
     try:
-        _db_verify.close()
+        _db_train.close()
     except Exception:
         pass
     if users:
