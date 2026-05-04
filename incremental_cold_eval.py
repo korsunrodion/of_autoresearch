@@ -79,8 +79,15 @@ def predict_df(df, models, thresholds, feats):
     vh_proba  = models['vh'].predict_proba(X_aug)[:, 1]
 
     X_base_cold   = make_cold_X(X_b_full, feats)
-    cold_vh_proba = (models['cold_vh'].predict_proba(X_base_cold)[:, 1]
-                     if 'cold_vh' in models else np.zeros(len(per_user)))
+    if 'cold_vh' in models:
+        cold_vh_obj = models['cold_vh']
+        if isinstance(cold_vh_obj, list):
+            cold_vh_proba = np.mean([clf.predict_proba(X_base_cold)[:, 1]
+                                     for clf in cold_vh_obj], axis=0)
+        else:
+            cold_vh_proba = cold_vh_obj.predict_proba(X_base_cold)[:, 1]
+    else:
+        cold_vh_proba = np.zeros(len(per_user))
     warm_rescue_proba = (models['warm_vh_rescue'].predict_proba(X_aug)[:, 1]
                          if 'warm_vh_rescue' in models else np.zeros(len(per_user)))
 

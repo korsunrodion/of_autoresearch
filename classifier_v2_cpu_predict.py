@@ -659,9 +659,9 @@ def train_and_save(model_dir, export_js=None):
     _fit_augmented(clf_vh, X_vh_aug, y_vh, X_vh_aug_cold)
 
     # ── Cold-start VH vs Extreme secondary classifier ───────────────────────
-    # Trained on VH+Extreme with model-level features set to cold values so it
-    # learns the individual-feature signal that distinguishes the two tiers.
-    # Used at predict time only for cold-start users predicted as Extreme.
+    # Trained on VH+Extreme with cold-start features (model-level context zeroed).
+    # Focused on the hard VH-vs-Extreme boundary so OOF threshold calibrates to
+    # the same distribution seen at inference for cold users with high e_proba.
     print("\n=== Cold VH vs Extreme (secondary classifier) ===", flush=True)
     sub_cve = per_user[per_user['risk_level'].isin(['Very High', 'Extreme'])].copy()
     sub_cve['y'] = (sub_cve['risk_level'] == 'Very High').astype(int)
@@ -670,18 +670,21 @@ def train_and_save(model_dir, export_js=None):
     spw_cve = (y_cve == 0).sum() / y_cve.sum()
     print(f"  VH={y_cve.sum()} Extreme={(y_cve==0).sum()} spw={spw_cve:.1f}", flush=True)
 
+    SEEDS_CVE = [42, 7, 123, 999, 2025]
     cve_oof = np.zeros(len(y_cve))
-    for seed in [42, 7, 123, 999, 2025]:
-        clf_tmp = LGBMClassifier(num_leaves=63, n_estimators=300, learning_rate=0.05,
+    for seed in SEEDS_CVE:
+        clf_tmp = LGBMClassifier(num_leaves=127, n_estimators=500, learning_rate=0.03,
                                  scale_pos_weight=spw_cve, n_jobs=-1, verbose=-1,
+                                 subsample=0.80, colsample_bytree=0.85,
+                                 min_child_samples=20, subsample_freq=1,
                                  random_state=seed)
-        cv_cve = StratifiedKFold(n_splits=5, shuffle=True, random_state=seed)
+        cv_cve = StratifiedKFold(n_splits=7, shuffle=True, random_state=seed)
         pr_cve = np.zeros(len(y_cve))
         for ti, vi in cv_cve.split(X_cve_cold, y_cve):
             clf_tmp.fit(X_cve_cold[ti], y_cve[ti])
             pr_cve[vi] = clf_tmp.predict_proba(X_cve_cold[vi])[:, 1]
         cve_oof += pr_cve
-    cve_oof /= 5
+    cve_oof /= len(SEEDS_CVE)
     t_cve = find_best_threshold(y_cve, cve_oof)
     from sklearn.metrics import precision_recall_fscore_support as _prf
     p_cve, r_cve, f_cve, _ = _prf(y_cve, (cve_oof >= t_cve).astype(int),
@@ -690,10 +693,17 @@ def train_and_save(model_dir, export_js=None):
           flush=True)
     thresholds['vh_extreme_cold'] = float(t_cve)
 
-    clf_cold_vh = LGBMClassifier(num_leaves=63, n_estimators=300, learning_rate=0.05,
-                                 scale_pos_weight=spw_cve, n_jobs=-1, verbose=-1,
-                                 random_state=42)
-    clf_cold_vh.fit(X_cve_cold, y_cve)
+    # Ensemble final cold_vh (5 seeds) for stable probabilities at inference
+    print("  Training final cold_vh ensemble...", flush=True)
+    cold_vh_clfs = []
+    for seed in SEEDS_CVE:
+        clf_cvh = LGBMClassifier(num_leaves=127, n_estimators=800, learning_rate=0.03,
+                                  scale_pos_weight=spw_cve, n_jobs=-1, verbose=-1,
+                                  subsample=0.80, colsample_bytree=0.85,
+                                  min_child_samples=20, subsample_freq=1,
+                                  random_state=seed)
+        clf_cvh.fit(X_cve_cold, y_cve)
+        cold_vh_clfs.append(clf_cvh)
 
     # ── Warm VH rescue classifier ────────────────────────────────────────────
     # Binary VH(1) vs {Extreme,High,Low}(0) on warm augmented features.
@@ -743,7 +753,7 @@ def train_and_save(model_dir, export_js=None):
     print(f"\nSaving models to {model_dir}/...", flush=True)
     for name, obj in [('extreme', clf_extreme), ('high', clf_high),
                       ('low', clf_low), ('ordinal', clf_ordinal), ('vh', clf_vh),
-                      ('cold_vh', clf_cold_vh), ('warm_vh_rescue', clf_warm_rescue)]:
+                      ('cold_vh', cold_vh_clfs), ('warm_vh_rescue', clf_warm_rescue)]:
         with open(os.path.join(model_dir, f'{name}_model.pkl'), 'wb') as f:
             pickle.dump(obj, f)
     with open(os.path.join(model_dir, 'thresholds.json'), 'w') as f:
@@ -846,11 +856,16 @@ def predict(model_dir, users=None, output=None):
     X_aug = np.column_stack([X_base, e_proba, h_proba, l_proba, ord_proba])
     vh_proba = models['vh'].predict_proba(X_aug)[:, 1]
 
-    # Cold-start secondary VH-vs-Extreme model: applied after main cascade
-    # for cold users classified as Extreme to rescue misclassified VH users.
     X_base_cold = make_cold_X(X_base, feats)
-    cold_vh_proba = (models['cold_vh'].predict_proba(X_base_cold)[:, 1]
-                     if 'cold_vh' in models else np.zeros(len(per_user)))
+    if 'cold_vh' in models:
+        cold_vh_obj = models['cold_vh']
+        if isinstance(cold_vh_obj, list):
+            cold_vh_proba = np.mean([clf.predict_proba(X_base_cold)[:, 1]
+                                     for clf in cold_vh_obj], axis=0)
+        else:
+            cold_vh_proba = cold_vh_obj.predict_proba(X_base_cold)[:, 1]
+    else:
+        cold_vh_proba = np.zeros(len(per_user))
 
     # Warm rescue: VH vs {Extreme,High,Low} on augmented features for warm users.
     warm_rescue_proba = (models['warm_vh_rescue'].predict_proba(X_aug)[:, 1]
