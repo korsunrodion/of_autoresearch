@@ -119,7 +119,7 @@ def predict_df(df, models, thresholds, feats):
     predicted = []
     for i in range(len(per_user)):
         if cold_mask[i]:
-            if vh_proba[i] >= t_vh_cold:
+            if cold_vh_proba[i] >= t_cold_vh_e:
                 predicted.append('Very High')
             elif e_proba[i] >= COLD_T_E:
                 predicted.append('Extreme')

@@ -90,6 +90,11 @@ COLD_OVERRIDE = {
     'model_norisk_rate':              1.0,
     'log_model_norisk_median_id_diff': np.nan,
     'rel_min_id_diff_24h':            np.nan,
+    # Zeroing cross-model features in cold-sim prevents the VH model from
+    # leaking user_max_risk_elsewhere (=4 for warm VH, =1 for cold-test VH)
+    # as its primary signal, forcing it to learn from individual features.
+    'user_max_risk_elsewhere':        0.0,
+    'user_model_count':               1.0,
 }
 
 # ── Shared globals for multiprocessing workers ────────────────────────────────
@@ -625,7 +630,8 @@ def train_and_save(model_dir, export_js=None):
               scale_pos_weight=spw_vh, subsample=0.80, colsample_bytree=0.85,
               min_child_samples=20, subsample_freq=1, verbose=-1, n_jobs=-1)),
     ], SEEDS_VH, 7, X_cold=X_vh_aug_cold,
-       model_ids=sub_vh['_model_id'].values)
+       model_ids=sub_vh['_model_id'].values,
+       cold_model_frac=0.50)
 
     # OOF threshold for VH on warm data (use best individual config)
     best_name, best_pool, _ = max(vh_results, key=lambda x: x[2])
@@ -873,9 +879,10 @@ def predict(model_dir, users=None, output=None):
     predicted = []
     for i in range(len(per_user)):
         if cold_mask[i]:
-            # VH checked before Extreme: cold_vh OOF F1=100% at t_vh_cold makes VH
-            # the reliable signal; Extreme captures remaining high-e_proba users.
-            if vh_proba[i] >= t_vh_cold:
+            # cold_vh model (VH vs Extreme, trained on cold features with
+            # user_max_risk_elsewhere zeroed) is the primary VH detector in cold start.
+            # Extreme catches remaining high-e_proba users not claimed by cold_vh.
+            if cold_vh_proba[i] >= t_cold_vh_e:
                 predicted.append('Very High')
             elif e_proba[i] >= COLD_T_E:
                 predicted.append('Extreme')
