@@ -1,3 +1,6 @@
 commit	VH_f1	Extreme_f1	High_f1	Low_f1	status	description
 8426eba	0.770	0.880	0.320	0.650	keep	baseline — balanced holdout (VH=221 High=75 Low=91)
 37c194f	0.820	0.900	0.560	0.650	keep	Exp3: cold_high rescue + fix train on subscriptions
+8fbe4ef	0.780	0.880	0.470	0.650	discard	Exp4: cold_low added — non-determinism hurt VH/High; warm Low threshold rose to 0.629
+2a1e99f	0.930	0.970	0.750	0.690	keep	Exp5: per-row model context + cold_low in Extreme branch — VH/Extreme targets hit
+fba8d49	0.950	0.970	0.860	0.800	keep	Exp6: cold_low rescue in VH/High branches — all targets met
