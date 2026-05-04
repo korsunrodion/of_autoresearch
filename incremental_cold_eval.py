@@ -103,16 +103,22 @@ def predict_df(df, models, thresholds, feats):
 
     cold_mask = (per_user['model_any_risk_frac'].fillna(0) == 0).values
 
-    t_cold_vh_e   = thresholds.get('vh_extreme_cold', 0.5)
-    t_warm_rescue = thresholds.get('warm_vh_rescue', 0.47)
+    t_cold_vh_e    = thresholds.get('vh_extreme_cold', 0.5)
+    t_warm_rescue  = thresholds.get('warm_vh_rescue', 0.47)
+    t_cold_vh_soft = thresholds.get('cold_vh_soft_gate', 0.01)
+    t_cold_ord     = thresholds.get('cold_ord_gate', 0.10)
 
     predicted = []
     for i in range(len(per_user)):
         if cold_mask[i]:
-            if cold_vh_proba[i] >= t_cold_vh_e:
+            if e_proba[i] >= COLD_T_E:
+                if cold_vh_proba[i] >= t_cold_vh_e:
+                    predicted.append('Very High')
+                else:
+                    predicted.append('Extreme')
+            elif cold_vh_proba[i] >= t_cold_vh_e and (
+                    e_proba[i] >= t_cold_vh_soft or ord_proba[i] >= t_cold_ord):
                 predicted.append('Very High')
-            elif e_proba[i] >= COLD_T_E:
-                predicted.append('Extreme')
             elif h_proba[i] >= t_h_cold:
                 predicted.append('High')
             elif l_proba[i] >= t_l_cold:

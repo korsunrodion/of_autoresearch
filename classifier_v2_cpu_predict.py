@@ -884,8 +884,10 @@ def predict(model_dir, users=None, output=None):
 
     cold_mask = (per_user['model_any_risk_frac'].fillna(0) == 0).values
 
-    t_cold_vh_e   = thresholds.get('vh_extreme_cold', 0.5)
-    t_warm_rescue = thresholds.get('warm_vh_rescue', 0.47)
+    t_cold_vh_e    = thresholds.get('vh_extreme_cold', 0.5)
+    t_warm_rescue  = thresholds.get('warm_vh_rescue', 0.47)
+    t_cold_vh_soft = thresholds.get('cold_vh_soft_gate', 0.01)
+    t_cold_ord     = thresholds.get('cold_ord_gate', 0.10)
 
     n_cold = cold_mask.sum()
     print(f"  Cold-start users: {n_cold}/{len(per_user)}"
@@ -894,13 +896,18 @@ def predict(model_dir, users=None, output=None):
     predicted = []
     for i in range(len(per_user)):
         if cold_mask[i]:
-            # cold_vh model (VH vs Extreme, trained on cold features with
-            # user_max_risk_elsewhere zeroed) is the primary VH detector in cold start.
-            # Extreme catches remaining high-e_proba users not claimed by cold_vh.
-            if cold_vh_proba[i] >= t_cold_vh_e:
+            # Extreme gate first: VH users look Extreme in cold start (high e_proba).
+            # cold_vh then rescues true VH from the Extreme pool.
+            if e_proba[i] >= COLD_T_E:
+                if cold_vh_proba[i] >= t_cold_vh_e:
+                    predicted.append('Very High')
+                else:
+                    predicted.append('Extreme')
+            elif cold_vh_proba[i] >= t_cold_vh_e and (
+                    e_proba[i] >= t_cold_vh_soft or ord_proba[i] >= t_cold_ord):
+                # Moderate VH: cold_vh confident + minimal e_proba or ordinal risk signal.
+                # No-risk FPs have e_proba < 0.009 AND ord_proba < 0.08 — blocked by both gates.
                 predicted.append('Very High')
-            elif e_proba[i] >= COLD_T_E:
-                predicted.append('Extreme')
             elif h_proba[i] >= t_h_cold:
                 predicted.append('High')
             elif l_proba[i] >= t_l_cold:

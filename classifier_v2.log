@@ -1,0 +1,63 @@
+Loading full dataset (selected=False)...
+  48775 rows, risk dist:
+risk_level
+No risk      40303
+Extreme       6503
+Very High     1048
+Low            609
+High           312
+Name: count, dtype: int64
+
+  Precomputing model stats...
+  Precomputing cross-model stats...
+Total per-user rows: 48775
+Dataset: 1048 positives (Very High), 40303 negatives (No risk)
+
+=== Baseline (classifier_tree.py replication): XGB drop_na (850 pos), scale=47.3 ===
+  Mean F1: 66.95%  seeds: ['66.91%', '66.80%', '67.05%', '66.97%', '67.00%']
+
+=== Improved: 13 configs × 8 seeds × 10-fold OOF ===
+  1048 positives, 40303 negatives, 35 features
+  Done: HGB-d4
+  Done: HGB-d6
+  Done: HGB-d3
+  Done: HGB-d5a
+  Done: HGB-d5b
+  Done: HGB-mln31
+  Done: HGB-mln15
+  Done: HGB-d4-lr01
+  Done: HGB-d7
+  Done: XGB-spw3
+  Done: XGB-spw5
+  Done: XGB-spw10
+  Done: XGB-d6
+
+============================================================
+Ensemble (13 configs, opt threshold=0.886):
+  Precision: 89.21%  Recall: 82.06%  F1: 85.49%
+
+Threshold sweep:
+   thresh  precision  recall      f1
+     0.30     45.94%  99.33%  62.82%
+     0.35     47.66%  99.14%  64.37%
+     0.40     49.52%  98.66%  65.94%
+     0.45     51.37%  98.19%  67.45%
+     0.50     54.20%  97.90%  69.77%
+     0.55     56.74%  96.85%  71.55%
+     0.60     59.79%  96.18%  73.74%
+     0.65     63.46%  94.47%  75.92%
+     0.70     67.96%  93.32%  78.65%
+     0.75     73.67%  91.03%  81.43%
+     0.80     78.61%  88.36%  83.20%
+     0.85     84.21%  85.50%  84.85%
+     0.90     90.66%  79.68%  84.81%
+
+============================================================
+SUMMARY
+============================================================
+  Baseline F1 (classifier_tree.py):         66.95%
+  Previous best (classifier_improved.py):   91.82%
+  This script F1:                           85.49%
+  vs baseline: +18.54%
+
+  Gap to 95% target: 9.51%

@@ -1,0 +1,65 @@
+Loading full dataset (selected=False)...
+  48775 rows
+risk_level
+No risk      40303
+Extreme       6503
+Very High     1048
+Low            609
+High           312
+
+Computing per-user features (CPU multiprocessing)...
+  Precomputing model norisk medians (vectorized CPU)...
+/workspace/autoresearch/classifier_v2_cpu.py:288: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+  Precomputing model rates and risk fractions...
+  Precomputing cross-model user stats...
+  Dispatching 1119 model groups to 8 workers...
+Total per-user rows: 48775
+Features: 206
+
+=== Step 1: Cascade OOF probas ===
+  Extreme:
+    E-nl127-spw6: P=96.86% R=97.77% F1=97.31%
+    E-nl127-spw12: P=96.58% R=98.15% F1=97.36%
+  High:
+    H-nl127-spw129: P=89.82% R=79.17% F1=84.16%
+  Low:
+    L-nl127-spw66: P=90.79% R=90.64% F1=90.71%
+  Ordinal (VH+Extreme vs rest):
+    ORD-nl127-spw5: P=95.18% R=96.15% F1=95.66%
+  Cascade done.
+
+=== Step 2: Very High + 4 cascade features ===
+  1048 pos, 40303 neg  spw=38.5
+  Augmented feature count: 210
+  VH LGB (20 seeds × 15-fold):
+    LGB-nl127-spw38: P=97.78% R=92.37% F1=95.00%
+    LGB-nl63-spw38: P=98.17% R=92.08% F1=95.03%
+  VH blend: P=97.58% R=92.37% F1=94.90% @ 0.767
+  Best VH F1: 95.03%
+
+=== Extreme ===
+  6503 pos, 40303 neg  spw=6.2
+    nl127-spw6: P=96.86% R=97.77% F1=97.31%
+    nl63-spw12: P=96.84% R=97.69% F1=97.27%
+  Final: P=96.79% R=97.82% F1=97.30%
+
+=== High ===
+  312 pos, 40303 neg  spw=129.2
+    nl127-spw129: P=87.07% R=82.05% F1=84.49%
+    nl63-spw200: P=88.40% R=83.01% F1=85.62%
+  Final: P=87.84% R=83.33% F1=85.53%
+
+=== Low ===
+  609 pos, 40303 neg  spw=66.2
+    nl127-spw66: P=90.67% R=90.97% F1=90.82%
+    nl63-spw132: P=91.15% R=91.30% F1=91.22%
+  Final: P=90.83% R=91.13% F1=90.98%
+
+============================================================
+SUMMARY — v2_cpu (15-fold VH, nl127 cascade, nl63+nl127 VH)
+============================================================
+  Extreme     : F1=97.30% *** ACHIEVED ***
+  Very High   : F1=95.03% *** ACHIEVED ***
+  High        : F1=85.53%  gap=9.47%
+  Low         : F1=90.98%  gap=4.02%

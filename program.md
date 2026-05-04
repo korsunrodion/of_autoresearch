@@ -1,3 +1,6 @@
+# the task
+There is a tree classifier for risky (possibly bots) users based on several feature. Current iteration is classifier_v2_cpu. It's important that the classifier uses only CPU and is quite fast, it's true currently. Next step is to implement Feature dropout retrain to help with cold starts. New rows are inserted in batches, there can be 100+ rows for 1 tracking model id. The classifier needs to assign risks properly when they are all 'no risk' by default.
+
 # autoresearch
 
 This is an experiment to have the LLM do its own research.

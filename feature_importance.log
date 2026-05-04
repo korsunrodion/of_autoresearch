@@ -1,0 +1,57 @@
+Loading data...
+Computing features...
+  Precomputing model norisk medians (vectorized CPU)...
+  Precomputing model rates and risk fractions...
+  Precomputing cross-model user stats...
+  Dispatching 1119 model groups to 8 workers...
+
+=== GROUP SUMMARY ===
+  intra_model    : 86.1%
+  individual     : 13.8%
+  other          : 0.0%
+
+=== TOP 30 FEATURES ===
+  intra_model      6.19%  cascade_ordinal
+  intra_model      5.77%  cascade_extreme
+  intra_model      4.51%  rel_min_id_diff_24h
+  intra_model      4.15%  id_percentile_in_model
+  intra_model      3.81%  time_percentile_in_model
+  intra_model      3.49%  model_vh_frac
+  intra_model      3.26%  log_min_time_diff
+  individual       2.80%  username_entropy
+  intra_model      2.66%  cic_frac_10k_12h
+  intra_model      2.54%  cic_10k_0h30m
+  intra_model      2.42%  log_time_since_model_first_sub
+  intra_model      2.12%  n_subs_at_sub_time_5m
+  intra_model      2.10%  cic_frac_20k_12h
+  individual       2.06%  hour_sin
+  intra_model      2.02%  model_any_risk_frac
+  individual       2.01%  hour_cos
+  intra_model      1.91%  cic_frac_200k_12h
+  intra_model      1.91%  log_min_id_diff_0h30m
+  intra_model      1.91%  cic_20k_0h30m
+  intra_model      1.65%  log_model_norisk_median_id_diff
+  intra_model      1.57%  cic_50k_0h30m
+  individual       1.56%  user_max_risk_elsewhere
+  intra_model      1.54%  cic_100k_0h30m
+  intra_model      1.53%  cic_200k_0h30m
+  intra_model      1.50%  cic_frac_500k_12h
+  individual       1.47%  username_digit_ratio
+  intra_model      1.44%  cic_frac_100k_12h
+  intra_model      1.43%  cic_frac_50k_12h
+  individual       1.41%  username_len
+  intra_model      1.35%  model_extreme_frac
+
+=== INTRA-MODEL SUBGROUPS ===
+  cic_count             : 17.0%
+  cic_frac              : 15.4%
+  percentile/timing     : 12.5%
+  cascade               : 12.0%
+  norisk_median         : 7.1%
+  model_risk_fracs      : 6.9%
+  log_min_id_diff       : 4.0%
+  time_gap              : 3.3%
+  id_spread             : 3.1%
+  partner_count         : 2.6%
+  model_density         : 2.3%
+  global_id             : 0.0%

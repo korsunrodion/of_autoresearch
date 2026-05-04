@@ -1,0 +1,114 @@
+Loading dataset (selected=False)...
+  48775 rows
+
+Computing features...
+  Norisk medians (vectorized CPU)...
+/workspace/v2_v3_cpu_copy/autoresearch/classifier_v2_cpu_predict.py:293: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/classifier_v2_cpu_predict.py:293: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/classifier_v2_cpu_predict.py:293: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/classifier_v2_cpu_predict.py:293: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/classifier_v2_cpu_predict.py:293: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/classifier_v2_cpu_predict.py:293: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/classifier_v2_cpu_predict.py:293: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/classifier_v2_cpu_predict.py:293: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/classifier_v2_cpu_predict.py:293: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/classifier_v2_cpu_predict.py:293: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/classifier_v2_cpu_predict.py:293: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/classifier_v2_cpu_predict.py:293: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/classifier_v2_cpu_predict.py:293: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/classifier_v2_cpu_predict.py:293: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/classifier_v2_cpu_predict.py:293: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/classifier_v2_cpu_predict.py:293: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/classifier_v2_cpu_predict.py:293: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/classifier_v2_cpu_predict.py:293: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/classifier_v2_cpu_predict.py:293: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/classifier_v2_cpu_predict.py:293: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/classifier_v2_cpu_predict.py:293: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/classifier_v2_cpu_predict.py:293: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/classifier_v2_cpu_predict.py:293: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/classifier_v2_cpu_predict.py:293: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/classifier_v2_cpu_predict.py:293: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/classifier_v2_cpu_predict.py:293: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/classifier_v2_cpu_predict.py:293: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/classifier_v2_cpu_predict.py:293: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/classifier_v2_cpu_predict.py:293: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/classifier_v2_cpu_predict.py:293: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/classifier_v2_cpu_predict.py:293: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/classifier_v2_cpu_predict.py:293: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/classifier_v2_cpu_predict.py:293: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/classifier_v2_cpu_predict.py:293: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/classifier_v2_cpu_predict.py:293: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/classifier_v2_cpu_predict.py:293: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/classifier_v2_cpu_predict.py:293: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/classifier_v2_cpu_predict.py:293: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/classifier_v2_cpu_predict.py:293: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/classifier_v2_cpu_predict.py:293: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+  Model rates and risk fractions...
+  Cross-model user stats...
+  Dispatching 1119 model groups to 8 workers...
+  206 features, 48775 users
+  Building cold-start augmentation...
+
+=== Cascade ===
+  Extreme...
+    E-nl63-spw6: P=96.34% R=98.00% F1=97.16%
+  High...
+    H-nl63-spw129: P=87.91% R=76.92% F1=82.05%
+  Low...
+    L-nl63-spw66: P=89.49% R=89.49% F1=89.49%
+  Ordinal...
+    ORD-nl63-spw5: P=93.48% R=96.99% F1=95.20%
+
+=== Very High (20s x 15-fold) ===
+  1048 pos, 40303 neg  spw=38.5  feats=210
+    LGB-nl63-spw38: P=98.55% R=90.84% F1=94.54%
+  VH threshold (OOF warm): 0.8053
+  VH cold threshold: 0.9949  cold OOF F1=100.00% P=100.00% R=100.00%
+  Training final VH model on full data...
+
+=== Cold VH vs Extreme (secondary classifier) ===
+  VH=1048 Extreme=6503 spw=6.2
+  Cold VH OOF: P=94.32% R=85.59% F1=89.74% @ t=0.519
+
+Saving models to models_cpu/...
+  Done.

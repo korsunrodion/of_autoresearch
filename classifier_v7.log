@@ -1,0 +1,64 @@
+Loading full dataset (selected=False)...
+  48775 rows
+  Precomputing model stats...
+  Precomputing cross-model stats...
+Total per-user rows: 48775
+Dataset: 1048 positives, 40303 negatives, 102 features
+
+=== Ensemble: 10 configs × 8 seeds × 10-fold OOF ===
+  Done: HGB-d4
+  Done: HGB-d6
+  Done: HGB-d3
+  Done: HGB-d5a
+  Done: HGB-d5b
+  Done: HGB-mln31
+  Done: HGB-mln15
+  Done: XGB-spw3
+  Done: XGB-spw5
+  Done: XGB-spw10
+
+============================================================
+Ensemble (10 configs, opt threshold=0.877):
+  Precision: 91.41%  Recall: 83.30%  F1: 87.17%
+
+Threshold sweep:
+   thresh  precision  recall      f1
+     0.30     48.75%  98.76%  65.28%
+     0.35     50.61%  98.47%  66.86%
+     0.40     52.61%  98.00%  68.47%
+     0.45     54.73%  97.71%  70.16%
+     0.50     57.17%  97.04%  71.95%
+     0.55     60.93%  96.28%  74.63%
+     0.60     64.57%  95.13%  76.93%
+     0.65     68.53%  93.70%  79.16%
+     0.70     73.80%  92.46%  82.08%
+     0.75     78.33%  90.36%  83.92%
+     0.80     83.48%  88.26%  85.81%
+     0.85     88.89%  84.73%  86.76%
+     0.90     93.76%  80.34%  86.54%
+
+Top-15 feature importances:
+  cic_20k_1h                               0.3675
+  cic_10k_1h                               0.2268
+  cic_50k_1h                               0.0685
+  cic_frac_10k_6h                          0.0535
+  cic_frac_20k_6h                          0.0417
+  cic_frac_50k_6h                          0.0300
+  log_model_norisk_median_id_diff          0.0204
+  user_max_risk_elsewhere                  0.0184
+  user_model_count                         0.0175
+  cic_100k_1h                              0.0170
+  cic_50k_4h                               0.0164
+  log_id_span_6h                           0.0164
+  cic_frac_100k_6h                         0.0160
+  log_min_id_diff_1h                       0.0139
+  log_min_consec_gap_6h                    0.0102
+
+============================================================
+SUMMARY
+============================================================
+  selected=True best (v5):        93.28%  (255 positives)
+  selected=False this run:         87.17%  (1048 positives)
+
+  Gap to 95%: 7.83%
+  Note: selected=False brings harder negatives — if still improving, try larger ensemble

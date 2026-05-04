@@ -1,0 +1,67 @@
+  Precomputing model stats...
+  Precomputing cross-model stats...
+Total rows: 11326
+Dataset: 255 positives (Very High), 8941 negatives (No risk)
+
+=== Baseline (XGB, drop_na, 204 pos, scale=32.9) ===
+  Mean F1: 86.09%  seeds: ['86.17%', '86.90%', '85.91%', '85.45%', '86.04%']
+
+=== Improved: 10 configs × 8 seeds × 10-fold OOF ===
+  255 positives, 8941 negatives, 32 features (+8 username)
+  Done: HGB-d4
+  Done: HGB-d6
+  Done: HGB-d3
+  Done: HGB-d5a
+  Done: HGB-d5b
+  Done: HGB-mln31
+  Done: HGB-mln15
+  Done: XGB-spw3
+  Done: XGB-spw5
+  Done: XGB-spw10
+
+============================================================
+Ensemble (10 configs, opt threshold=0.667):
+  Precision: 90.94%  Recall: 90.59%  F1: 90.77%
+
+Threshold sweep:
+   thresh  precision  recall      f1
+     0.30     82.03%  94.90%  88.00%
+     0.35     84.81%  94.12%  89.22%
+     0.40     86.96%  94.12%  90.40%
+     0.45     87.08%  92.55%  89.73%
+     0.50     88.26%  91.37%  89.79%
+     0.55     88.85%  90.59%  89.71%
+     0.60     89.19%  90.59%  89.88%
+     0.65     90.23%  90.59%  90.41%
+     0.70     91.50%  88.63%  90.04%
+     0.75     92.15%  87.45%  89.74%
+     0.80     93.56%  85.49%  89.34%
+     0.85     95.43%  81.96%  88.19%
+     0.90     96.23%  80.00%  87.37%
+
+Top feature importances (XGB):
+  close_id_count_4h                   0.5116
+  close_id_count_24h                  0.1994
+  log_min_id_diff_4h                  0.0797
+  close_id_count_1h                   0.0197
+  user_model_count                    0.0192
+  uname_trailing_number               0.0147
+  uname_underscore_count              0.0132
+  close_id_count_672h                 0.0120
+  log_min_id_diff_336h                0.0103
+  user_max_risk_elsewhere             0.0098
+  close_id_count_336h                 0.0084
+  log_min_id_diff_1h                  0.0082
+  partner_count_1h                    0.0080
+  log_min_id_diff_24h                 0.0079
+  partner_count_24h                   0.0077
+
+============================================================
+SUMMARY
+============================================================
+  Baseline F1 (classifier_tree.py):           86.09%
+  Previous best (classifier_improved.py):     91.82%
+  This script F1 (+username features):        90.77%
+  vs previous best: -1.05%
+
+  Gap to 95% target: 4.23%
