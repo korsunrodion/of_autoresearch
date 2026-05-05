@@ -7,7 +7,10 @@
   "vh": 0.4301921938980312,
   "vh_cold": 0.9303138914583217,
   "vh_extreme_cold": 0.6305063257923231,
-  "cold_high_extreme": 0.31165074789206076,
+  "cold_high_extreme": 0.003,
+  "cold_vh_in_extreme": 0.05,
+  "warm_vh_rescue_vhfrac": 0.75,
+  "cold_vh_vhfrac_gate": 0.90,
   "cold_low_norisk": 0.5049104742572431,
   "warm_vh_rescue": 0.4850177826467167
 }

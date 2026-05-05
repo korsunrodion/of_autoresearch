@@ -1,381 +1,273 @@
 """
-cold_start_test.py — Deterministic cold-start classifier test suite.
+cold_start_test.py — Incremental cold-start batch test for a single model.
 
-Pass criteria (checked at round 4, all cold-model data present):
-  - Extreme recall >= 0.95
-  - VH (Very High) recall >= 0.90
+Loads all rows for the target model from DB_VERIFY_URL, splits them into
+N chronological batches, and inserts them into DATABASE_URL one at a time.
+After each predict() run, the batch is promoted to warm context
+(is_internal_data=True, ground-truth labels) so subsequent batches benefit
+from the accumulated history.
 
 Usage:
-  python cold_start_test.py [--model-dir models_cpu] [--n-rounds 4] [--min-rows 50] [--n-cold 20]
-
-Model selection is deterministic (no random seed):
-  - All models with >= min_rows subscribers.
-  - Sorted by (n_extreme + n_vh) descending, stable sort.
-  - Top n_cold models selected.
-
-Exits with code 0 on PASS, 1 on FAIL.
+  python cold_start_test.py [--model "Amanda 🎀 GG swaps"] [--batches 5] [--model-dir models_cpu]
 """
+import argparse
 import sys
 import os
-import argparse
-import json
-import pickle
-import warnings
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-warnings.filterwarnings('ignore')
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-
-import numpy as np
 import pandas as pd
-from sklearn.metrics import precision_recall_fscore_support
+from sklearn.metrics import classification_report
 
-from classifier_v2_cpu_predict import (
-    compute_per_user, make_cold_X, FEATURES, COLD_OVERRIDE,
-)
-from base import fetch_df, clean
-from db import db as _db
+from db_verify import verify_db, Subscription
+from db import db, TrackingLinkSubscriber
 
-MODEL_DIR = 'models_cpu'
+RISK_LABELS = ['No risk', 'Low', 'High', 'Very High', 'Extreme']
+_RISK_ORDER = {r: i for i, r in enumerate(RISK_LABELS)}
+_CHUNK = 500
 
-
-# ── Model loading ──────────────────────────────────────────────────────────────
-
-def load_models_and_thresholds(model_dir):
-    models = {}
-    for name in ['extreme', 'high', 'low', 'ordinal', 'vh', 'cold_vh', 'warm_vh_rescue']:
-        path = os.path.join(model_dir, f'{name}_model.pkl')
-        if os.path.exists(path):
-            with open(path, 'rb') as f:
-                models[name] = pickle.load(f)
-    with open(os.path.join(model_dir, 'thresholds.json')) as f:
-        thresholds = json.load(f)
-    with open(os.path.join(model_dir, 'features.json')) as f:
-        feats = json.load(f)['base_features']
-    return models, thresholds, feats
+RISK_TO_DB = {
+    'No risk':   'no risk',
+    'Low':       'low',
+    'High':      'high',
+    'Very High': 'very high',
+    'Extreme':   'extreme',
+}
 
 
-# ── Prediction (mirrors incremental_cold_eval.predict_df exactly) ─────────────
-
-def predict_df(df, models, thresholds, feats):
-    """
-    Run full prediction cascade on df.
-    df must have is_internal_data column so the feedback-loop fix can fire.
-    Returns per_user DataFrame with 'predicted' and 'is_cold' columns.
-    """
-    per_user = compute_per_user(df)
-
-    # Feedback-loop fix: recompute model-context features from warm rows only.
-    if 'is_internal_data' in df.columns:
-        df_warm = df[df['is_internal_data'] == True]
-        warm_risk_fracs = {}
-        warm_norisk_rates = {}
-        for model_name, mdf in df_warm.groupby('tracking_model_name'):
-            n = len(mdf)
-            warm_risk_fracs[model_name] = {
-                'vh':      (mdf['risk_level'] == 'Very High').sum() / n,
-                'extreme': (mdf['risk_level'] == 'Extreme').sum() / n,
-                'any':     (~mdf['risk_level'].isin(['No risk'])).sum() / n,
-            }
-            warm_norisk_rates[model_name] = (mdf['risk_level'] == 'No risk').sum() / n
-
-        user_to_model = df.drop_duplicates('user_name').set_index('user_name')['tracking_model_name']
-        pu_models = per_user['user_name'].map(user_to_model)
-
-        per_user['model_vh_frac']      = pu_models.map(lambda m: warm_risk_fracs.get(m, {}).get('vh', 0.0))
-        per_user['model_extreme_frac'] = pu_models.map(lambda m: warm_risk_fracs.get(m, {}).get('extreme', 0.0))
-        per_user['model_any_risk_frac']= pu_models.map(lambda m: warm_risk_fracs.get(m, {}).get('any', 0.0))
-        per_user['model_norisk_rate']  = pu_models.map(lambda m: warm_norisk_rates.get(m, 1.0))
-
-    X_b_full = per_user[feats].values
-
-    e_proba   = models['extreme'].predict_proba(X_b_full)[:, 1]
-    h_proba   = models['high'].predict_proba(X_b_full)[:, 1]
-    l_proba   = models['low'].predict_proba(X_b_full)[:, 1]
-    ord_proba = models['ordinal'].predict_proba(X_b_full)[:, 1]
-    X_aug     = np.column_stack([X_b_full, e_proba, h_proba, l_proba, ord_proba])
-    vh_proba  = models['vh'].predict_proba(X_aug)[:, 1]
-
-    X_base_cold   = make_cold_X(X_b_full, feats)
-    if 'cold_vh' in models:
-        cold_vh_obj = models['cold_vh']
-        if isinstance(cold_vh_obj, list):
-            cold_vh_proba = np.mean([clf.predict_proba(X_base_cold)[:, 1]
-                                     for clf in cold_vh_obj], axis=0)
-        else:
-            cold_vh_proba = cold_vh_obj.predict_proba(X_base_cold)[:, 1]
-    else:
-        cold_vh_proba = np.zeros(len(per_user))
-    warm_rescue_proba = (models['warm_vh_rescue'].predict_proba(X_aug)[:, 1]
-                         if 'warm_vh_rescue' in models else np.zeros(len(per_user)))
-
-    t_e  = thresholds.get('extreme', 0.5)
-    t_vh = thresholds.get('vh', 0.5)
-    t_h  = thresholds.get('high', 0.5)
-    t_l  = thresholds.get('low', 0.5)
-
-    COLD_T_E  = thresholds.get('extreme_cold', 0.50)
-    t_vh_cold = thresholds.get('vh_cold',   t_vh)
-    t_h_cold  = thresholds.get('high_cold', t_h)
-    t_l_cold  = thresholds.get('low_cold',  t_l)
-
-    cold_mask = (per_user['model_any_risk_frac'].fillna(0) == 0).values
-
-    t_cold_vh_e    = thresholds.get('vh_extreme_cold', 0.5)
-    t_warm_rescue  = thresholds.get('warm_vh_rescue', 0.47)
-    t_cold_vh_soft = thresholds.get('cold_vh_soft_gate', 0.01)
-    t_cold_ord     = thresholds.get('cold_ord_gate', 0.10)
-
-    predicted = []
-    for i in range(len(per_user)):
-        if cold_mask[i]:
-            if e_proba[i] >= COLD_T_E:
-                if cold_vh_proba[i] >= t_cold_vh_e:
-                    predicted.append('Very High')
-                else:
-                    predicted.append('Extreme')
-            elif cold_vh_proba[i] >= t_cold_vh_e and (
-                    e_proba[i] >= t_cold_vh_soft or ord_proba[i] >= t_cold_ord):
-                predicted.append('Very High')
-            elif h_proba[i] >= t_h_cold:
-                predicted.append('High')
-            elif l_proba[i] >= t_l_cold:
-                predicted.append('Low')
-            else:
-                predicted.append('No risk')
-
-        else:
-            if e_proba[i] >= t_e:
-                rescue = warm_rescue_proba[i] >= t_warm_rescue
-                predicted.append('Very High' if rescue else 'Extreme')
-            elif vh_proba[i] >= t_vh:
-                predicted.append('Very High')
-            elif h_proba[i] >= t_h:
-                predicted.append('High')
-            elif l_proba[i] >= t_l:
-                predicted.append('Low')
-            else:
-                predicted.append('No risk')
-
-    per_user['predicted'] = predicted
-    per_user['vh_proba']  = vh_proba
-    per_user['e_proba']   = e_proba
-    per_user['is_cold']   = cold_mask
-    return per_user
+def _normalize_risk(r):
+    if not isinstance(r, str) or not r.strip():
+        return 'No risk'
+    t = r.strip().title()
+    return 'No risk' if t == 'No Risk' else (t if t in _RISK_ORDER else 'No risk')
 
 
-# ── Metrics helpers ────────────────────────────────────────────────────────────
-
-def metrics_for(true_series, pred_series, level):
-    t = (true_series == level).astype(int).values
-    p = (pred_series == level).astype(int).values
-    n_true = int(t.sum())
-    if n_true == 0:
-        return None
-    pr, rc, f1, _ = precision_recall_fscore_support(
-        t, p, pos_label=1, average='binary', zero_division=0)
-    return float(pr), float(rc), float(f1), n_true
-
-
-def print_metrics_table(cold_results):
-    levels = ['Extreme', 'Very High', 'High', 'Low']
-    print(f"  {'Level':<12} {'P':>7} {'R':>7} {'F1':>7}  n_true")
-    for lvl in levels:
-        m = metrics_for(cold_results['true_risk'], cold_results['predicted'], lvl)
-        if m:
-            pr, rc, f1, n = m
-            print(f"  {lvl:<12} {pr:>7.1%} {rc:>7.1%} {f1:>7.1%}  {n}")
-        else:
-            print(f"  {lvl:<12} {'—':>7} {'—':>7} {'—':>7}  0")
-    pred_dist = cold_results['predicted'].value_counts()
-    true_dist = cold_results['true_risk'].value_counts()
-    print(f"  True:  {dict(true_dist)}")
-    print(f"  Pred:  {dict(pred_dist)}")
-
-
-# ── Main test runner ───────────────────────────────────────────────────────────
-
-def main():
-    parser = argparse.ArgumentParser(description=__doc__,
-                                     formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('--model-dir', default=MODEL_DIR)
-    parser.add_argument('--n-rounds',  type=int, default=4)
-    parser.add_argument('--min-rows',  type=int, default=50)
-    parser.add_argument('--n-cold',    type=int, default=20)
-    args = parser.parse_args()
-
-    # ── Load data ──────────────────────────────────────────────────────────────
-    print("Loading training data...", flush=True)
-    df_all = fetch_df(selected=False)
-    df_all = clean(df_all)
-    try:
-        _db.close()
-    except Exception:
-        pass
-    print(f"  {len(df_all)} rows, {df_all['tracking_model_name'].nunique()} models",
-          flush=True)
-
-    # ── Deterministic cold model selection ─────────────────────────────────────
-    # No random seed — selection is a stable sort, fully reproducible.
-    model_stats = df_all.groupby('tracking_model_name').agg(
-        n_rows=('user_name', 'count'),
-        n_extreme=('risk_level', lambda s: (s == 'Extreme').sum()),
-        n_vh=('risk_level', lambda s: (s == 'Very High').sum()),
+def _load_model_rows(model_name: str) -> pd.DataFrame:
+    verify_db.connect(reuse_if_open=True)
+    rows = list(
+        Subscription.select()
+        .where(Subscription.tracking_model_name == model_name)
+        .dicts()
     )
-    model_stats['n_top2'] = model_stats['n_extreme'] + model_stats['n_vh']
+    df = pd.DataFrame(rows)
+    if df.empty:
+        return df
+    df['subscribed_at'] = pd.to_datetime(df['subscribed_at'], errors='coerce')
+    df = df.dropna(subset=['subscribed_at', 'user_name'])
+    df = df.sort_values('subscribed_at').reset_index(drop=True)
+    df['risk_level'] = df['risk_level'].apply(_normalize_risk)
+    return df
 
-    eligible = model_stats[model_stats['n_rows'] >= args.min_rows].copy()
-    # Stable sort: primary key n_top2 desc, secondary key n_rows desc (for tie-breaking).
-    eligible = eligible.sort_values(['n_top2', 'n_rows'], ascending=[False, False])
 
-    cold_models = eligible.index.tolist()[:args.n_cold]
-    cold_set = set(cold_models)
+def _ensure_col():
+    db.connect(reuse_if_open=True)
+    db.execute_sql("""
+        ALTER TABLE tracking_links_subscriber
+        ADD COLUMN IF NOT EXISTS is_internal_data BOOLEAN DEFAULT FALSE
+    """)
 
-    print(f"\nSelected {len(cold_models)} cold models "
-          f"(>= {args.min_rows} rows, top {args.n_cold} by n_extreme+n_vh):",
-          flush=True)
-    for cm in cold_models:
-        row = model_stats.loc[cm]
-        dist = df_all[df_all['tracking_model_name'] == cm]['risk_level'].value_counts()
-        dist_str = '  '.join(f"{lvl}={cnt}" for lvl, cnt in dist.items() if cnt > 0)
-        print(f"  {cm[:55]:<55} {int(row['n_rows']):>4} rows  {dist_str}")
 
-    # ── Split warm / cold data ─────────────────────────────────────────────────
-    df_warm = df_all[~df_all['tracking_model_name'].isin(cold_set)].copy()
-    df_warm['is_internal_data'] = True
+def _remove_model_rows(model_name: str):
+    """Remove all rows for this model (cleanup for re-runs)."""
+    db.connect(reuse_if_open=True)
+    deleted = (
+        TrackingLinkSubscriber
+        .delete()
+        .where(TrackingLinkSubscriber.tracking_link_id == model_name)
+        .execute()
+    )
+    if deleted:
+        print(f"  Removed {deleted} existing rows for '{model_name}'", flush=True)
 
-    # True labels for cold models (first-occurrence label per user_name)
-    df_cold_true = df_all[df_all['tracking_model_name'].isin(cold_set)].copy()
-    df_cold_true = df_cold_true.sort_values(
-        ['tracking_model_name', 'subscribed_at']).reset_index(drop=True)
 
-    true_labels = (df_cold_true.drop_duplicates('user_name')
-                   .set_index('user_name')['risk_level']
-                   .rename('true_risk'))
+def _reset_stale_cold_rows(model_name: str):
+    """Promote leftover cold rows from previous test runs to warm.
 
-    # Assign batch indices per model (temporal order, n_rounds quantiles)
-    def assign_batches(g, n_rounds):
-        idx = np.arange(len(g))
-        return pd.Series((idx * n_rounds // len(g)).astype(int), index=g.index)
+    test_accuracy.py seeds cold rows for holdout models and may leave them behind.
+    Those rows contaminate cold_start_test deduplication: they appear as explicit cold
+    rows for other models and can override the Amanda batch predictions via max-risk dedup.
+    Reset them to warm (is_internal_data=True) so only the current test's cold rows matter.
+    """
+    db.connect(reuse_if_open=True)
+    n = (
+        TrackingLinkSubscriber
+        .update(is_internal_data=True)
+        .where(
+            (TrackingLinkSubscriber.is_internal_data == False) &
+            (TrackingLinkSubscriber.tracking_link_id != model_name)
+        )
+        .execute()
+    )
+    if n:
+        print(f"  Reset {n} stale cold rows (other models) to warm", flush=True)
 
-    df_cold_true['_batch'] = df_cold_true.groupby(
-        'tracking_model_name', group_keys=False).apply(
-        lambda g: assign_batches(g, args.n_rounds))
 
-    print(f"\nBatch sizes per model (n_rounds={args.n_rounds}):", flush=True)
-    for cm in cold_models:
-        bc = (df_cold_true[df_cold_true['tracking_model_name'] == cm]
-              ['_batch'].value_counts().sort_index())
-        print(f"  {cm[:50]:<50} {dict(bc)}")
+def _insert_cold_batch(batch: pd.DataFrame, model_name: str):
+    db.connect(reuse_if_open=True)
+    rows = []
+    for _, r in batch.iterrows():
+        uid = str(r.get('user_id') or '').strip()
+        try:
+            user_id_int = int(uid) if uid else None
+        except ValueError:
+            user_id_int = None
+        try:
+            chargebacks = int(float(str(r.get('total_chargebacks') or 0)))
+        except (ValueError, TypeError):
+            chargebacks = 0
+        rows.append({
+            'id':                f"cs_{r['id']}",
+            'tracking_link_id':  model_name,
+            'username':          r.get('user_name'),
+            'user_id':           user_id_int,
+            'subscription_date': str(r.get('subscribed_at')),
+            'risk_level':        'no risk',
+            'total_chargebacks': chargebacks,
+            'is_processed':      False,
+            'is_internal_data':  False,
+        })
+    for i in range(0, len(rows), _CHUNK):
+        TrackingLinkSubscriber.insert_many(rows[i:i + _CHUNK]).execute()
 
-    # ── Load models ────────────────────────────────────────────────────────────
-    print("\nLoading models...", flush=True)
-    models, thresholds, feats = load_models_and_thresholds(args.model_dir)
-    print(f"  Models: {list(models.keys())}", flush=True)
-    print(f"  Thresholds: {thresholds}", flush=True)
 
-    # ── Incremental rounds ─────────────────────────────────────────────────────
-    summary = []  # (round, level, P, R, F1, n_true)
-    round4_metrics = {}  # level -> (P, R, F1, n_true) at final round
+def _promote_to_warm(batch: pd.DataFrame):
+    """Set is_internal_data=True and restore ground-truth labels for this batch."""
+    db.connect(reuse_if_open=True)
+    for _, r in batch.iterrows():
+        risk_db = RISK_TO_DB.get(r['risk_level'], 'no risk')
+        (TrackingLinkSubscriber
+         .update(is_internal_data=True, is_processed=True, risk_level=risk_db)
+         .where(TrackingLinkSubscriber.id == f"cs_{r['id']}")
+         .execute())
 
-    for rnd in range(args.n_rounds):
-        frac_pct = int(round((rnd + 1) / args.n_rounds * 100))
-        # Batches 0..rnd: cold users injected with risk_level='No risk'
-        df_cold_batches = df_cold_true[df_cold_true['_batch'] <= rnd].copy()
-        df_cold_batches['risk_level']       = 'No risk'
-        df_cold_batches['risk_score']       = 1
-        df_cold_batches['is_internal_data'] = False
-        df_cold_batches = df_cold_batches.drop(columns=['_batch'])
 
-        df_sim = pd.concat([df_warm, df_cold_batches], ignore_index=True)
+def _batch_gt(batch: pd.DataFrame) -> dict:
+    """Max ground-truth risk per username in this batch."""
+    gt: dict[str, str] = {}
+    for _, row in batch.iterrows():
+        uname = row.get('user_name')
+        if not isinstance(uname, str) or not uname.strip():
+            continue
+        r = row['risk_level']
+        prev = gt.get(uname)
+        if prev is None or _RISK_ORDER[r] > _RISK_ORDER[prev]:
+            gt[uname] = r
+    return gt
 
-        n_cold_users = df_cold_batches['user_name'].nunique()
-        n_cold_rows  = len(df_cold_batches)
-        print(f"\n{'='*65}", flush=True)
-        print(f"Round {rnd+1}/{args.n_rounds}  ({frac_pct}% of cold rows)"
-              f"  {n_cold_rows} cold rows, {n_cold_users} cold users", flush=True)
-        print(f"  Total rows: {len(df_sim)} "
-              f"(warm={len(df_warm)}, cold={n_cold_rows})", flush=True)
 
-        per_user = predict_df(df_sim, models, thresholds, feats)
+def run_cold_start_test(model_name: str, n_batches: int = 5,
+                        model_dir: str = 'models_cpu'):
+    print(f"\n{'='*60}", flush=True)
+    print(f"Cold-start batch test: {model_name}", flush=True)
+    print(f"{'='*60}", flush=True)
 
-        # Evaluate only on cold-model users
-        cold_pu = per_user[per_user['is_cold']].copy()
-        cold_pu = cold_pu.merge(true_labels.reset_index(), on='user_name', how='inner')
+    df = _load_model_rows(model_name)
+    if df.empty:
+        print(f"ERROR: No rows found for '{model_name}'", flush=True)
+        return
 
-        print(f"  Cold users in prediction: {len(cold_pu)}", flush=True)
-        if cold_pu.empty:
-            print("  (no cold users found — check model selection)", flush=True)
+    print(f"\nTotal rows: {len(df)}", flush=True)
+    print("Ground-truth distribution:", flush=True)
+    print(df['risk_level'].value_counts().to_string(), flush=True)
+
+    _ensure_col()
+    _reset_stale_cold_rows(model_name)
+    _remove_model_rows(model_name)
+
+    # Chronological split
+    batch_size = len(df) // n_batches
+    batches = []
+    for i in range(n_batches):
+        start = i * batch_size
+        end = (start + batch_size) if i < n_batches - 1 else len(df)
+        batches.append(df.iloc[start:end].copy())
+
+    print(f"\nBatch sizes: {[len(b) for b in batches]}", flush=True)
+
+    from predict import predict as _predict
+
+    all_y_true, all_y_pred = [], []
+
+    for batch_idx, batch in enumerate(batches, 1):
+        print(f"\n{'─'*60}", flush=True)
+        print(f"Batch {batch_idx}/{n_batches}  ({len(batch)} rows)", flush=True)
+        risk_dist = batch['risk_level'].value_counts().to_dict()
+        print(f"  Risk: {risk_dist}", flush=True)
+        date_range = (batch['subscribed_at'].min().date(),
+                      batch['subscribed_at'].max().date())
+        print(f"  Dates: {date_range[0]} → {date_range[1]}", flush=True)
+
+        _insert_cold_batch(batch, model_name)
+        print(f"  Inserted {len(batch)} cold rows", flush=True)
+
+        print(f"\nRunning predict (batch {batch_idx})...", flush=True)
+        results = _predict(model_dir=model_dir)
+
+        if results is None or results.empty:
+            print("ERROR: predict returned no results", flush=True)
+            _promote_to_warm(batch)
             continue
 
-        print_metrics_table(cold_pu)
+        pred_map = dict(zip(results['user_name'], results['predicted_risk']))
+        batch_gt_map = _batch_gt(batch)
 
-        for lvl in ['Extreme', 'Very High', 'High', 'Low']:
-            m = metrics_for(cold_pu['true_risk'], cold_pu['predicted'], lvl)
-            if m:
-                pr, rc, f1, n = m
-                summary.append((rnd + 1, lvl, pr, rc, f1, n))
-                if rnd == args.n_rounds - 1:
-                    round4_metrics[lvl] = (pr, rc, f1, n)
+        y_true, y_pred, missing = [], [], 0
+        for uname, gt in batch_gt_map.items():
+            pred = pred_map.get(uname)
+            if pred is None:
+                missing += 1
+                continue
+            y_true.append(gt)
+            y_pred.append(pred)
+            all_y_true.append(gt)
+            all_y_pred.append(pred)
 
-    # ── Summary table ──────────────────────────────────────────────────────────
-    print(f"\n{'='*65}", flush=True)
-    print("SUMMARY — All levels across rounds", flush=True)
-    print(f"{'Round':<7} {'%Data':>6} {'Level':<12} {'P':>7} {'R':>7} {'F1':>7}  n_true",
-          flush=True)
-    for row in summary:
-        rnd, lvl, pr, rc, f1, n = row
-        frac_pct = int(round(rnd / args.n_rounds * 100))
-        print(f"  {rnd:<5} {frac_pct:>5}%  {lvl:<12} {pr:>7.1%} {rc:>7.1%} {f1:>7.1%}  {n}",
+        n = len(y_true)
+        if n == 0:
+            print(f"  ERROR: No predictions for batch {batch_idx} users", flush=True)
+        else:
+            correct = sum(t == p for t, p in zip(y_true, y_pred))
+            if missing:
+                print(f"  Warning: {missing} users missing from predict output", flush=True)
+            print(f"\n  Batch {batch_idx} accuracy: {correct}/{n} = {correct/n:.1%}", flush=True)
+
+            labels_present = [l for l in RISK_LABELS if l in set(y_true) | set(y_pred)]
+            print(f"  Classification report (batch {batch_idx}):", flush=True)
+            print(classification_report(y_true, y_pred,
+                                        labels=labels_present, zero_division=0),
+                  flush=True)
+
+        # Promote to warm context so next batch benefits from this batch's history
+        print(f"  Promoting batch {batch_idx} to warm context (ground-truth labels)...",
               flush=True)
-
-    # ── Assertions at round 4 ──────────────────────────────────────────────────
-    print(f"\n{'='*65}", flush=True)
-    print("ASSERTIONS (round 4 — all cold data present):", flush=True)
-
-    EXTREME_RECALL_THRESHOLD = 0.95
-    VH_RECALL_THRESHOLD      = 0.90
-
-    assertion_results = []
-
-    # Extreme recall
-    if 'Extreme' in round4_metrics:
-        _, rc_e, _, n_e = round4_metrics['Extreme']
-        passed = rc_e >= EXTREME_RECALL_THRESHOLD
-        status = "PASS" if passed else "FAIL"
-        print(f"  [{status}] Extreme recall {rc_e:.1%} >= {EXTREME_RECALL_THRESHOLD:.0%}"
-              f"  (n={n_e})", flush=True)
-        assertion_results.append(('Extreme recall', passed, rc_e, EXTREME_RECALL_THRESHOLD))
-    else:
-        print(f"  [FAIL] Extreme recall — no Extreme users found in cold models", flush=True)
-        assertion_results.append(('Extreme recall', False, 0.0, EXTREME_RECALL_THRESHOLD))
-
-    # VH recall
-    if 'Very High' in round4_metrics:
-        _, rc_vh, _, n_vh = round4_metrics['Very High']
-        passed = rc_vh >= VH_RECALL_THRESHOLD
-        status = "PASS" if passed else "FAIL"
-        print(f"  [{status}] VH recall {rc_vh:.1%} >= {VH_RECALL_THRESHOLD:.0%}"
-              f"  (n={n_vh})", flush=True)
-        assertion_results.append(('VH recall', passed, rc_vh, VH_RECALL_THRESHOLD))
-    else:
-        print(f"  [FAIL] VH recall — no Very High users found in cold models", flush=True)
-        assertion_results.append(('VH recall', False, 0.0, VH_RECALL_THRESHOLD))
+        _promote_to_warm(batch)
 
     # Final summary
-    failed = [(name, actual, threshold)
-              for name, passed, actual, threshold in assertion_results
-              if not passed]
-
-    print(f"\n{'='*65}", flush=True)
-    if not failed:
-        print("RESULT: PASS — all assertions met.", flush=True)
-        sys.exit(0)
-    else:
-        print("RESULT: FAIL — the following assertions did not pass:", flush=True)
-        for name, actual, threshold in failed:
-            print(f"  - {name}: got {actual:.1%}, required >= {threshold:.0%}", flush=True)
-        sys.exit(1)
+    if all_y_true:
+        n_total = len(all_y_true)
+        correct_total = sum(t == p for t, p in zip(all_y_true, all_y_pred))
+        print(f"\n{'='*60}", flush=True)
+        print(f"TOTAL ACCURACY: {correct_total}/{n_total} = {correct_total/n_total:.1%}"
+              f"  ({n_batches} batches)", flush=True)
+        print(f"{'='*60}", flush=True)
+        labels_present = [l for l in RISK_LABELS if l in set(all_y_true) | set(all_y_pred)]
+        print("\nOverall classification report:", flush=True)
+        print(classification_report(all_y_true, all_y_pred,
+                                    labels=labels_present, zero_division=0),
+              flush=True)
 
 
 if __name__ == '__main__':
-    main()
+    parser = argparse.ArgumentParser(description='Incremental cold-start batch test')
+    parser.add_argument('--model',     default='Amanda 🎀 GG swaps',
+                        help='Model name to test (must exist in DB_VERIFY_URL)')
+    parser.add_argument('--batches',   type=int, default=5,
+                        help='Number of chronological batches to split the model into')
+    parser.add_argument('--model-dir', default='models_cpu',
+                        help='Directory with trained model .pkl files')
+    args = parser.parse_args()
+
+    run_cold_start_test(
+        model_name=args.model,
+        n_batches=args.batches,
+        model_dir=args.model_dir,
+    )

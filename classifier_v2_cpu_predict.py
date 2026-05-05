@@ -933,8 +933,14 @@ def predict(model_dir, users=None, output=None):
             lambda m: warm_risk_fracs.get(m, {}).get('any', 0.0))
         per_user['model_norisk_rate'] = pu_models.map(
             lambda m: warm_norisk_rates.get(m, 1.0))
+
+        cold_df = df[~df['is_internal_data'].fillna(False)]
+        models_with_explicit_cold = set(cold_df['tracking_model_name'].unique())
+        per_user['model_has_explicit_cold'] = pu_models.isin(models_with_explicit_cold)
+
         print(f"  Model-context recomputed from {len(df_warm_ctx)} warm rows "
-              f"({(~df['is_internal_data'].fillna(False)).sum()} cold rows excluded)",
+              f"({len(cold_df)} cold rows excluded, "
+              f"{len(models_with_explicit_cold)} models with explicit cold)",
               flush=True)
 
     X_base = per_user[feats].values
@@ -996,12 +1002,17 @@ def predict(model_dir, users=None, output=None):
 
     cold_mask = (per_user['model_any_risk_frac'].fillna(0) == 0).values
 
-    t_cold_vh_e    = thresholds.get('vh_extreme_cold', 0.5)
-    t_cold_high    = thresholds.get('cold_high_extreme', 0.5)
-    t_cold_low     = thresholds.get('cold_low_norisk', 0.5)
-    t_warm_rescue  = thresholds.get('warm_vh_rescue', 0.47)
-    t_cold_vh_soft = thresholds.get('cold_vh_soft_gate', 0.01)
-    t_cold_ord     = thresholds.get('cold_ord_gate', 0.10)
+    t_cold_vh_e        = thresholds.get('vh_extreme_cold', 0.5)
+    t_cold_vh_extreme  = thresholds.get('cold_vh_in_extreme', t_cold_vh_e)
+    t_cold_high        = thresholds.get('cold_high_extreme', 0.5)
+    t_cold_low         = thresholds.get('cold_low_norisk', 0.5)
+    t_warm_rescue      = thresholds.get('warm_vh_rescue', 0.47)
+    t_warm_rescue_vhfrac   = thresholds.get('warm_vh_rescue_vhfrac', t_warm_rescue)
+    t_cold_vh_vhfrac_gate  = thresholds.get('cold_vh_vhfrac_gate', 0.90)
+    t_cold_vh_soft         = thresholds.get('cold_vh_soft_gate', 0.01)
+    t_cold_ord         = thresholds.get('cold_ord_gate', 0.10)
+
+    model_vh_frac_arr = per_user['model_vh_frac'].fillna(0).values
 
     n_cold = cold_mask.sum()
     print(f"  Cold-start users: {n_cold}/{len(per_user)}"
@@ -1011,9 +1022,9 @@ def predict(model_dir, users=None, output=None):
     for i in range(len(per_user)):
         if cold_mask[i]:
             # Extreme gate first: VH users look Extreme in cold start (high e_proba).
-            # cold_vh then rescues true VH from the Extreme pool.
+            # t_cold_vh_extreme (lower than t_cold_vh_e) rescues VH from the Extreme pool.
             if e_proba[i] >= COLD_T_E:
-                if cold_vh_proba[i] >= t_cold_vh_e:
+                if cold_vh_proba[i] >= t_cold_vh_extreme:
                     predicted.append('Very High')
                 elif cold_high_proba[i] >= t_cold_high:
                     predicted.append('High')
@@ -1039,9 +1050,24 @@ def predict(model_dir, users=None, output=None):
             else:
                 predicted.append('No risk')
         else:
-            if e_proba[i] >= t_e:
-                rescue = warm_rescue_proba[i] >= t_warm_rescue
-                predicted.append('Very High' if rescue else 'Extreme')
+            if model_vh_frac_arr[i] > 0.01 and cold_vh_proba[i] >= t_cold_vh_vhfrac_gate:
+                predicted.append('Very High')
+            elif e_proba[i] >= t_e:
+                if model_vh_frac_arr[i] > 0.01:
+                    # Model has labeled VH history (Amanda-style). Use cold_vh first,
+                    # then warm_rescue as fallback with a higher threshold to suppress
+                    # Extreme FP (Extreme max wr ≈ 0.73; VH via wr typically ≥ 0.78).
+                    if cold_vh_proba[i] >= t_cold_vh_extreme:
+                        predicted.append('Very High')
+                    elif warm_rescue_proba[i] >= t_warm_rescue_vhfrac:
+                        predicted.append('Very High')
+                    elif cold_high_proba[i] >= t_cold_high:
+                        predicted.append('High')
+                    else:
+                        predicted.append('Extreme')
+                else:
+                    rescue = warm_rescue_proba[i] >= t_warm_rescue
+                    predicted.append('Very High' if rescue else 'Extreme')
             elif vh_proba[i] >= t_vh:
                 predicted.append('Very High')
             elif h_proba[i] >= t_h:
@@ -1052,33 +1078,50 @@ def predict(model_dir, users=None, output=None):
                 predicted.append('No risk')
 
     _RISK_NUM = {'No risk': 0, 'Low': 1, 'High': 2, 'Very High': 3, 'Extreme': 4}
+    has_explicit_cold_col = per_user.get('model_has_explicit_cold',
+                                         pd.Series(False, index=per_user.index))
     results = pd.DataFrame({
-        'user_name':      per_user['user_name'].values,
-        'predicted_risk': predicted,
-        'risk_num':       [_RISK_NUM[r] for r in predicted],
-        'is_cold':        cold_mask,
-        'vh_proba':       np.round(vh_proba, 4),
-        'extreme_proba':  np.round(e_proba, 4),
-        'high_proba':     np.round(h_proba, 4),
-        'low_proba':      np.round(l_proba, 4),
+        'user_name':        per_user['user_name'].values,
+        'predicted_risk':   predicted,
+        'risk_num':         [_RISK_NUM[r] for r in predicted],
+        'is_cold':          cold_mask,
+        'is_explicit_cold': (cold_mask & has_explicit_cold_col.values),
+        'vh_proba':         np.round(vh_proba, 4),
+        'extreme_proba':    np.round(e_proba, 4),
+        'high_proba':       np.round(h_proba, 4),
+        'low_proba':        np.round(l_proba, 4),
     })
 
-    # For users with new (cold) subscriptions: use their cold-path prediction.
-    # For warm-only users: use their highest-risk warm prediction.
+    # Deduplication priority: explicit cold > warm > implicit cold.
     cold_r = results[results['is_cold']]
     warm_r = results[~results['is_cold']]
-    if not cold_r.empty:
-        cold_best = cold_r.loc[cold_r.groupby('user_name')['risk_num'].idxmax()]
+
+    explicit_cold_r = cold_r[cold_r['is_explicit_cold']]
+    implicit_cold_r = cold_r[~cold_r['is_explicit_cold']]
+
+    if not explicit_cold_r.empty:
+        explicit_best = explicit_cold_r.loc[
+            explicit_cold_r.groupby('user_name')['risk_num'].idxmax()]
     else:
-        cold_best = cold_r
-    cold_users = set(cold_best['user_name'])
-    warm_only = warm_r[~warm_r['user_name'].isin(cold_users)]
-    if not warm_only.empty:
-        warm_best = warm_only.loc[warm_only.groupby('user_name')['risk_num'].idxmax()]
+        explicit_best = explicit_cold_r
+    explicit_users = set(explicit_best['user_name'])
+
+    warm_eligible = warm_r[~warm_r['user_name'].isin(explicit_users)]
+    if not warm_eligible.empty:
+        warm_best = warm_eligible.loc[warm_eligible.groupby('user_name')['risk_num'].idxmax()]
     else:
-        warm_best = warm_only
-    results = pd.concat([cold_best, warm_best], ignore_index=True)
-    results = results.drop(columns=['risk_num', 'is_cold'])
+        warm_best = warm_eligible
+    covered_users = explicit_users | set(warm_best['user_name'])
+
+    implicit_remaining = implicit_cold_r[~implicit_cold_r['user_name'].isin(covered_users)]
+    if not implicit_remaining.empty:
+        implicit_best = implicit_remaining.loc[
+            implicit_remaining.groupby('user_name')['risk_num'].idxmax()]
+    else:
+        implicit_best = implicit_remaining
+
+    results = pd.concat([explicit_best, warm_best, implicit_best], ignore_index=True)
+    results = results.drop(columns=['risk_num', 'is_cold', 'is_explicit_cold'])
 
     if output:
         results.to_csv(output, index=False)
