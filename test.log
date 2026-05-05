@@ -1,0 +1,148 @@
+Loading verify DB...
+  52025 subscriptions, 1120 models
+  Warm : 47596 rows, 1103 models
+  Cold : 4429 rows in 17 holdout models  (VH=204, High=65, Low=91)
+  Holdout risk dist:
+risk_level
+No risk      3617
+Extreme       425
+Very High     221
+Low            91
+High           75
+  4261 unique users in holdout set
+  Clearing tracking_links_subscriber...
+  Seeded 47596 warm + 4429 cold rows
+
+Running predict...
+Loading models...
+Loading dataset...
+  48775 rows
+Computing features...
+  Norisk medians (vectorized CPU)...
+/workspace/v2_v3_cpu_copy/autoresearch/predict.py:299: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/predict.py:299: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/predict.py:299: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/predict.py:299: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/predict.py:299: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/predict.py:299: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/predict.py:299: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/predict.py:299: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/predict.py:299: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/predict.py:299: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/predict.py:299: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/predict.py:299: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/predict.py:299: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/predict.py:299: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/predict.py:299: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/predict.py:299: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/predict.py:299: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/predict.py:299: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/predict.py:299: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/predict.py:299: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/predict.py:299: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/predict.py:299: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/predict.py:299: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/predict.py:299: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/predict.py:299: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/predict.py:299: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/predict.py:299: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/predict.py:299: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/predict.py:299: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/predict.py:299: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/predict.py:299: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/predict.py:299: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/predict.py:299: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/predict.py:299: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/predict.py:299: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/predict.py:299: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/predict.py:299: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/predict.py:299: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/predict.py:299: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+/workspace/v2_v3_cpu_copy/autoresearch/predict.py:299: RuntimeWarning: All-NaN slice encountered
+  row_mins = np.nanmin(dd, axis=1)
+  Model rates and risk fractions...
+  Cross-model user stats...
+  Dispatching 1119 model groups to 8 workers...
+  Model-context recomputed from 44619 warm rows (4156 cold rows excluded)
+  Cold-start users: 35625/48775  t_vh=0.4302  t_vh_cold=0.9303
+
+Distribution:
+predicted_risk
+No risk      33499
+Extreme       4715
+Very High      312
+Low            177
+High           120
+  Warning: 236 ground-truth users not found in predict output
+
+============================================================
+Accuracy: 3981/4025 = 98.9%  (17 holdout models, 4025 users)
+============================================================
+
+Classification report:
+              precision    recall  f1-score   support
+
+     No risk       1.00      1.00      1.00      3287
+         Low       0.68      0.96      0.80        52
+        High       0.90      0.82      0.86        56
+   Very High       0.93      0.98      0.95       209
+     Extreme       1.00      0.94      0.97       421
+
+    accuracy                           0.99      4025
+   macro avg       0.90      0.94      0.92      4025
+weighted avg       0.99      0.99      0.99      4025
+
+Confusion matrix (rows=truth, cols=predicted):
+           No risk  Low  High  Very High  Extreme
+No risk       3285    0     0          2        0
+Low              0   50     0          2        0
+High             0    4    46          6        0
+Very High        0    5     0        204        0
+Extreme          1   14     5          5      396
+
+Predicted distribution (cold batch):
+predicted_risk
+No risk      3286
+Extreme       396
+Very High     219
+Low            73
+High           51
