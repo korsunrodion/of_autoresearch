@@ -1,5 +1,0 @@
-commit	extreme_recall	vh_recall	high_recall	low_recall	status	description
-7de86dd	0.546	0.667	0.308	0.500	discard	baseline: cold cascade Extreme-first, cold_vh rescue fires for 88% non-VH
-3b91cc6	0.953	0.007	0.308	0.500	discard	VH-first cold cascade: Extreme PASS(95.3%), VH FAIL(0.7%) — cold OOF leaks user_max_risk_elsewhere
-556750a	0.977	0.917	0.212	0.500	keep	PASS: COLD_OVERRIDE fix + cold_vh as primary VH detector. Extreme 97.7% VH 91.7%
-9c22774	0.976	0.917	0.212	0.500	keep	PASS: ensemble cold_vh (5-seed, nl=127 n=800 lr=0.03). Same recall — 91.7% is ceiling
