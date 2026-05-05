@@ -908,6 +908,7 @@ def predict(model_dir, users=None, output=None):
         df_warm_ctx = df[df['is_internal_data'] == True]
         warm_risk_fracs = {}
         warm_norisk_rates = {}
+        warm_row_counts = {}
         for model_name, mdf in df_warm_ctx.groupby('tracking_model_name'):
             n = len(mdf)
             warm_risk_fracs[model_name] = {
@@ -916,6 +917,7 @@ def predict(model_dir, users=None, output=None):
                 'any':     (~mdf['risk_level'].isin(['No risk'])).sum() / n,
             }
             warm_norisk_rates[model_name] = (mdf['risk_level'] == 'No risk').sum() / n
+            warm_row_counts[model_name] = n
 
         # Map each per_user row to its model's warm-context fracs
         # (per_user may have one row per model appearance for multi-model users)
@@ -933,10 +935,23 @@ def predict(model_dir, users=None, output=None):
             lambda m: warm_risk_fracs.get(m, {}).get('any', 0.0))
         per_user['model_norisk_rate'] = pu_models.map(
             lambda m: warm_norisk_rates.get(m, 1.0))
+        per_user['model_warm_count'] = pu_models.map(
+            lambda m: warm_row_counts.get(m, 0))
 
         cold_df = df[~df['is_internal_data'].fillna(False)]
         models_with_explicit_cold = set(cold_df['tracking_model_name'].unique())
         per_user['model_has_explicit_cold'] = pu_models.isin(models_with_explicit_cold)
+
+        if 'tracking_model_name' in per_user.columns and not cold_df.empty:
+            cold_pairs = set(zip(cold_df['user_name'], cold_df['tracking_model_name']))
+            is_actual_cold = np.array([
+                (un, tm) in cold_pairs
+                for un, tm in zip(per_user['user_name'].values,
+                                  per_user['tracking_model_name'].fillna('').values)
+            ])
+        else:
+            is_actual_cold = np.zeros(len(per_user), dtype=bool)
+        per_user['_is_actual_cold'] = is_actual_cold
 
         print(f"  Model-context recomputed from {len(df_warm_ctx)} warm rows "
               f"({len(cold_df)} cold rows excluded, "
@@ -1013,6 +1028,11 @@ def predict(model_dir, users=None, output=None):
     t_cold_ord         = thresholds.get('cold_ord_gate', 0.10)
 
     model_vh_frac_arr = per_user['model_vh_frac'].fillna(0).values
+    model_warm_count_arr = per_user.get('model_warm_count',
+                                        pd.Series(0, index=per_user.index)).fillna(0).values
+    is_actual_cold_arr = per_user.get('_is_actual_cold',
+                                      pd.Series(cold_mask, index=per_user.index)).values
+    MIN_WARM_ROWS = 55
 
     n_cold = cold_mask.sum()
     print(f"  Cold-start users: {n_cold}/{len(per_user)}"
@@ -1034,13 +1054,13 @@ def predict(model_dir, users=None, output=None):
                     predicted.append('Extreme')
             elif cold_vh_proba[i] >= t_cold_vh_e and (
                     e_proba[i] >= t_cold_vh_soft or ord_proba[i] >= t_cold_ord):
-                # Moderate VH: cold_vh confident + minimal e_proba or ordinal risk signal.
-                # No-risk FPs have e_proba < 0.009 AND ord_proba < 0.08 — blocked by both gates.
+                # Rescue Low users who appear VH-like in cold start.
                 if cold_low_proba[i] >= t_cold_low:
                     predicted.append('Low')
                 else:
                     predicted.append('Very High')
             elif h_proba[i] >= t_h_cold:
+                # Rescue Low users who appear High-like in cold start.
                 if cold_low_proba[i] >= t_cold_low:
                     predicted.append('Low')
                 else:
@@ -1050,7 +1070,7 @@ def predict(model_dir, users=None, output=None):
             else:
                 predicted.append('No risk')
         else:
-            if model_vh_frac_arr[i] > 0.01 and cold_vh_proba[i] >= t_cold_vh_vhfrac_gate:
+            if model_vh_frac_arr[i] > 0.10 and cold_vh_proba[i] >= t_cold_vh_vhfrac_gate and e_proba[i] >= t_cold_vh_soft:
                 predicted.append('Very High')
             elif e_proba[i] >= t_e:
                 if model_vh_frac_arr[i] > 0.01:
@@ -1068,11 +1088,14 @@ def predict(model_dir, users=None, output=None):
                 else:
                     rescue = warm_rescue_proba[i] >= t_warm_rescue
                     predicted.append('Very High' if rescue else 'Extreme')
-            elif vh_proba[i] >= t_vh:
+            elif vh_proba[i] >= t_vh and not (
+                    is_actual_cold_arr[i] and model_warm_count_arr[i] < MIN_WARM_ROWS):
                 predicted.append('Very High')
-            elif h_proba[i] >= t_h:
+            elif h_proba[i] >= t_h and not (
+                    is_actual_cold_arr[i] and model_warm_count_arr[i] < MIN_WARM_ROWS):
                 predicted.append('High')
-            elif l_proba[i] >= t_l:
+            elif l_proba[i] >= t_l and not (
+                    is_actual_cold_arr[i] and model_warm_count_arr[i] < MIN_WARM_ROWS):
                 predicted.append('Low')
             else:
                 predicted.append('No risk')
@@ -1080,12 +1103,14 @@ def predict(model_dir, users=None, output=None):
     _RISK_NUM = {'No risk': 0, 'Low': 1, 'High': 2, 'Very High': 3, 'Extreme': 4}
     has_explicit_cold_col = per_user.get('model_has_explicit_cold',
                                          pd.Series(False, index=per_user.index))
+    is_actual_cold_col = per_user.get('_is_actual_cold',
+                                      pd.Series(cold_mask, index=per_user.index))
     results = pd.DataFrame({
         'user_name':        per_user['user_name'].values,
         'predicted_risk':   predicted,
         'risk_num':         [_RISK_NUM[r] for r in predicted],
-        'is_cold':          cold_mask,
-        'is_explicit_cold': (cold_mask & has_explicit_cold_col.values),
+        'is_cold':          is_actual_cold_col.values,
+        'is_explicit_cold': (is_actual_cold_col.values & has_explicit_cold_col.values),
         'vh_proba':         np.round(vh_proba, 4),
         'extreme_proba':    np.round(e_proba, 4),
         'high_proba':       np.round(h_proba, 4),

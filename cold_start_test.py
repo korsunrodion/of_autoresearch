@@ -236,6 +236,13 @@ def run_cold_start_test(model_name: str, n_batches: int = 5,
                                         labels=labels_present, zero_division=0),
                   flush=True)
 
+            # Debug: show wrong predictions
+            wrong_preds = [(u, t, p) for u, t, p in zip(batch_gt_map.keys(), y_true, y_pred) if t != p]
+            if wrong_preds:
+                print(f"  Wrong ({len(wrong_preds)}): ", flush=True)
+                for u, t, p in wrong_preds[:20]:
+                    print(f"    {u}: gt={t} → pred={p}", flush=True)
+
         # Promote to warm context so next batch benefits from this batch's history
         print(f"  Promoting batch {batch_idx} to warm context (ground-truth labels)...",
               flush=True)
