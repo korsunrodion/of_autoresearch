@@ -1054,11 +1054,12 @@ def predict(model_dir, users=None, output=None):
                     predicted.append('Extreme')
             elif cold_vh_proba[i] >= t_cold_vh_e and (
                     e_proba[i] >= t_cold_vh_soft or ord_proba[i] >= t_cold_ord):
-                # Rescue Low users who appear VH-like in cold start.
-                if cold_low_proba[i] >= t_cold_low:
-                    predicted.append('Low')
-                else:
-                    predicted.append('Very High')
+                # iter6: Low rescue removed from this branch only — when the
+                # cold_vh classifier strongly says VH, trust it over cold_low_proba.
+                # iter5 showed disabling this rescue lifts VH F1 +0.009 without
+                # hurting it elsewhere; the Extreme→Low and High→Low rescues
+                # are kept because removing them lost more Low TPs than gained.
+                predicted.append('Very High')
             elif h_proba[i] >= t_h_cold:
                 # Rescue Low users who appear High-like in cold start.
                 if cold_low_proba[i] >= t_cold_low:

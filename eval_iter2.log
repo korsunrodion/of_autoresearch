@@ -1,0 +1,85 @@
+[evaluate] models: ['Amanda 🎀 GG swaps', '@allesGGswap', '@asya_marketer']
+Loading models...
+Loading dataset...
+  48301 rows
+Computing features...
+  Norisk medians (vectorized CPU)...
+  Model rates and risk fractions...
+  Cross-model user stats...
+  Dispatching 1117 model groups to 8 workers...
+  Model-context recomputed from 48007 warm rows (294 cold rows excluded, 1 models with explicit cold)
+  Cold-start users: 35816/48301  t_vh=0.3239  t_vh_cold=0.8121
+Saved 38627 predictions to /tmp/_eval_preds.csv
+
+Distribution:
+predicted_risk
+No risk      33221
+Extreme       4553
+Very High      572
+High           152
+Low            129
+
+Updating risk levels in DB...
+  Updated 0 rows.
+[evaluate] Amanda 🎀 GG swaps                        n= 294  acc=0.997
+Loading models...
+Loading dataset...
+  48248 rows
+Computing features...
+  Norisk medians (vectorized CPU)...
+  Model rates and risk fractions...
+  Cross-model user stats...
+  Dispatching 1117 model groups to 8 workers...
+  Model-context recomputed from 48007 warm rows (241 cold rows excluded, 1 models with explicit cold)
+  Cold-start users: 35763/48248  t_vh=0.3239  t_vh_cold=0.8121
+Saved 38733 predictions to /tmp/_eval_preds.csv
+
+Distribution:
+predicted_risk
+No risk      33391
+Extreme       4491
+Very High      586
+High           141
+Low            124
+
+Updating risk levels in DB...
+  Updated 0 rows.
+[evaluate] @allesGGswap                             n= 241  acc=1.000
+Loading models...
+Loading dataset...
+  9191 rows
+Computing features...
+  Norisk medians (vectorized CPU)...
+  Model rates and risk fractions...
+  Cross-model user stats...
+  Dispatching 392 model groups to 8 workers...
+  Model-context recomputed from 8958 warm rows (233 cold rows excluded, 1 models with explicit cold)
+  Cold-start users: 6462/9191  t_vh=0.3239  t_vh_cold=0.8121
+Saved 8753 predictions to /tmp/_eval_preds.csv
+
+Distribution:
+predicted_risk
+No risk      7246
+Extreme      1374
+Very High      64
+Low            43
+High           26
+
+Updating risk levels in DB...
+  Updated 0 rows.
+[evaluate] @asya_marketer                           n= 233  acc=0.948
+
+[evaluate] classification_report:
+              precision    recall  f1-score   support
+
+     No risk       0.98      1.00      0.99       379
+         Low       0.86      1.00      0.92        18
+        High       1.00      0.91      0.95        22
+   Very High       0.97      0.97      0.97        62
+     Extreme       1.00      0.97      0.98       287
+
+    accuracy                           0.98       768
+   macro avg       0.96      0.97      0.96       768
+weighted avg       0.98      0.98      0.98       768
+
+{"pass": true, "score": 0.0068, "details": {"macro_f1_4risk": 0.956817651850481, "macro_f1_all5": 0.9633653486344317, "weighted_f1": 0.9831222130322336, "overall_accuracy": 0.9830729166666666, "per_class_f1": {"No risk": 0.9895561357702349, "Low": 0.9230769230769231, "High": 0.9523809523809523, "Very High": 0.967741935483871, "Extreme": 0.984070796460177}, "n_predictions": 768, "n_models": 3, "n_batches": 5, "models": ["Amanda \ud83c\udf80 GG swaps", "@allesGGswap", "@asya_marketer"], "per_model": {"Amanda \ud83c\udf80 GG swaps": {"n": 294, "acc": 0.9965986394557823}, "@allesGGswap": {"n": 241, "acc": 1.0}, "@asya_marketer": {"n": 233, "acc": 0.9484978540772532}}, "targets": {"macro_f1_4risk": 0.95, "per_class": 0.9}, "margins": {"macro_f1_4risk": 0.006817651850480999, "f1_very_high": 0.06774193548387097, "f1_high": 0.052380952380952306, "f1_low": 0.023076923076923106}, "elapsed_s": 53.5}}
