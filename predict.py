@@ -1033,6 +1033,23 @@ def predict(model_dir, users=None, output=None):
     t_cold_vh_vhfrac_gate  = thresholds.get('cold_vh_vhfrac_gate', 0.90)
     t_cold_vh_soft         = thresholds.get('cold_vh_soft_gate', 0.01)
     t_cold_ord         = thresholds.get('cold_ord_gate', 0.10)
+    # Per-branch cold_low rescue thresholds (set very high to disable rescue in that branch)
+    t_low_in_extreme   = thresholds.get('cold_low_in_extreme', t_cold_low)
+    t_low_in_vh        = thresholds.get('cold_low_in_vh',      t_cold_low)
+    t_low_in_high      = thresholds.get('cold_low_in_high',    t_cold_low)
+    # Standalone cold_low gate requires additional risk signal (ord or e proba) to fire
+    t_cold_low_ord_gate = thresholds.get('cold_low_ord_gate', 0.0)
+    t_cold_low_e_gate   = thresholds.get('cold_low_e_gate',   0.0)
+    # Universal warm-path VH rescue: high cold_vh + ord signal, regardless of mvf
+    t_cvh_universal      = thresholds.get('cvh_universal_gate', 1.01)
+    t_cvh_universal_ord  = thresholds.get('cvh_universal_ord',  0.05)
+    # Secondary universal rescue: medium cvh + high ord
+    t_cvh_universal2     = thresholds.get('cvh_universal2_gate', 1.01)
+    t_cvh_universal2_ord = thresholds.get('cvh_universal2_ord', 0.50)
+    # cvh-VH gate inside warm Extreme branch optionally requires h_proba floor
+    t_cvh_h_floor        = thresholds.get('cvh_in_extreme_h_floor', 0.0)
+    # warm h_proba High rescue inside cold Extreme branch (catches Highs missed by cold_high)
+    t_warm_h_in_extreme  = thresholds.get('warm_h_in_extreme', 1.01)
 
     model_vh_frac_arr = per_user['model_vh_frac'].fillna(0).values
     model_warm_count_arr = per_user.get('model_warm_count',
@@ -1056,30 +1073,41 @@ def predict(model_dir, users=None, output=None):
             if e_proba[i] >= COLD_T_E:
                 if cold_vh_proba[i] >= t_cold_vh_extreme:
                     predicted.append('Very High')
+                elif h_proba[i] >= t_warm_h_in_extreme:
+                    predicted.append('High')
                 elif cold_high_proba[i] >= t_cold_high:
                     predicted.append('High')
-                elif cold_low_proba[i] >= t_cold_low:
+                elif cold_low_proba[i] >= t_low_in_extreme:
                     predicted.append('Low')
                 else:
                     predicted.append('Extreme')
             elif cold_vh_proba[i] >= t_cold_vh_e and (
                     e_proba[i] >= t_cold_vh_soft or ord_proba[i] >= t_cold_ord):
                 # Rescue Low users who appear VH-like in cold start.
-                if cold_low_proba[i] >= t_cold_low:
+                if cold_low_proba[i] >= t_low_in_vh:
                     predicted.append('Low')
                 else:
                     predicted.append('Very High')
             elif h_proba[i] >= t_h_cold:
                 # Rescue Low users who appear High-like in cold start.
-                if cold_low_proba[i] >= t_cold_low:
+                if cold_low_proba[i] >= t_low_in_high:
                     predicted.append('Low')
                 else:
                     predicted.append('High')
-            elif cold_low_proba[i] >= t_cold_low:
+            elif (cold_low_proba[i] >= t_cold_low and
+                  (ord_proba[i] >= t_cold_low_ord_gate or e_proba[i] >= t_cold_low_e_gate)):
                 predicted.append('Low')
             else:
                 predicted.append('No risk')
         else:
+            # Universal high-cvh + ord rescue: catches VH users in low-vh-frac models.
+            if cold_vh_proba[i] >= t_cvh_universal and ord_proba[i] >= t_cvh_universal_ord:
+                predicted.append('Very High')
+                continue
+            # Secondary universal: medium cvh + high ord
+            if cold_vh_proba[i] >= t_cvh_universal2 and ord_proba[i] >= t_cvh_universal2_ord:
+                predicted.append('Very High')
+                continue
             # High-confidence cold_vh in VH-history model: catch VH users whose
             # e_proba falls below t_e but whose pattern is unmistakably VH
             # (cvh ≈ 1.0, Extreme max cvh < 0.003). Require model_vh_frac > 0.10
@@ -1093,7 +1121,7 @@ def predict(model_dir, users=None, output=None):
                     # Model has labeled VH history (Amanda-style). Use cold_vh first,
                     # then warm_rescue as fallback with a higher threshold to suppress
                     # Extreme FP (Extreme max wr ≈ 0.73; VH via wr typically ≥ 0.78).
-                    if cold_vh_proba[i] >= t_cold_vh_extreme:
+                    if cold_vh_proba[i] >= t_cold_vh_extreme and h_proba[i] >= t_cvh_h_floor:
                         predicted.append('Very High')
                     elif warm_rescue_proba[i] >= t_warm_rescue_vhfrac:
                         predicted.append('Very High')
@@ -1114,7 +1142,17 @@ def predict(model_dir, users=None, output=None):
                     is_actual_cold_arr[i] and model_warm_count_arr[i] < MIN_WARM_ROWS):
                 predicted.append('Low')
             else:
-                predicted.append('No risk')
+                # Fallback: very-high ord_proba with No-risk default — escalate
+                # using cvh signal (high cvh → VH, otherwise → Extreme).
+                t_ord_fb = thresholds.get('ord_fallback_gate', 1.01)
+                t_cvh_fb_split = thresholds.get('cvh_fallback_split', 0.50)
+                if ord_proba[i] >= t_ord_fb:
+                    if cold_vh_proba[i] >= t_cvh_fb_split:
+                        predicted.append('Very High')
+                    else:
+                        predicted.append('Extreme')
+                else:
+                    predicted.append('No risk')
 
     _RISK_NUM = {'No risk': 0, 'Low': 1, 'High': 2, 'Very High': 3, 'Extreme': 4}
     has_explicit_cold_col = per_user.get('model_has_explicit_cold',
@@ -1127,10 +1165,19 @@ def predict(model_dir, users=None, output=None):
         'risk_num':         [_RISK_NUM[r] for r in predicted],
         'is_cold':          is_actual_cold_col.values,
         'is_explicit_cold': (is_actual_cold_col.values & has_explicit_cold_col.values),
+        'cold_mask':        cold_mask,
+        'model_vh_frac':    np.round(model_vh_frac_arr, 4),
+        'model_warm_count': model_warm_count_arr.astype(int),
         'vh_proba':         np.round(vh_proba, 4),
         'extreme_proba':    np.round(e_proba, 4),
         'high_proba':       np.round(h_proba, 4),
         'low_proba':        np.round(l_proba, 4),
+        'ord_proba':        np.round(ord_proba, 4),
+        'cold_vh_proba':    np.round(cold_vh_proba, 4),
+        'cold_high_proba':  np.round(cold_high_proba, 4),
+        'cold_low_proba':   np.round(cold_low_proba, 4),
+        'warm_rescue_proba': np.round(warm_rescue_proba, 4),
+        'tracking_model_name': per_user.get('tracking_model_name', pd.Series('', index=per_user.index)).values,
     })
 
     # Deduplication priority (highest to lowest):
@@ -1169,7 +1216,7 @@ def predict(model_dir, users=None, output=None):
         implicit_best = implicit_remaining
 
     results = pd.concat([explicit_best, warm_best, implicit_best], ignore_index=True)
-    results = results.drop(columns=['risk_num', 'is_cold', 'is_explicit_cold'])
+    results = results.drop(columns=['risk_num'])
 
     if output:
         results.to_csv(output, index=False)
